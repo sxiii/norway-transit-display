@@ -24,6 +24,7 @@ query {
     lastUpdated
     delay
     location { latitude longitude }
+    serviceJourney { id }
   }
 }
 """
