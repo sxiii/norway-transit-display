@@ -1,0 +1,57 @@
+name: Collect Norwegian vehicle positions
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+  push:
+    paths:
+      - ".github/workflows/collect-vehicle-data.yml"
+      - "scripts/**"
+      - "tests/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vehicle-data-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run offline tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Query Entur vehicle positions
+        id: entur
+        env:
+          ET_CLIENT_NAME: github-sxiii-norway-transit-display
+        run: |
+          mkdir -p data
+          python scripts/entur_vehicles.py --codespaces VYG VYX --output data/vehicles.json
+
+      - name: Probe Ruter GraphQL endpoint
+        id: ruter
+        continue-on-error: true
+        run: python scripts/ruter_probe.py > data/ruter-probe.json
+
+      - name: Upload collected data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: norway-transit-${{ github.run_number }}
+          path: |
+            data/
+          if-no-files-found: warn
+          retention-days: 14
