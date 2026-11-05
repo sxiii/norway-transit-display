@@ -53,14 +53,40 @@ class NormalizerTests(unittest.TestCase):
                 "estimatedCalls": [{
                     "serviceJourney": {"id": "VYG:ServiceJourney:42"},
                     "expectedDepartureTime": "2026-11-06T12:05:00+01:00",
+                    "aimedDepartureTime": "2026-11-06T12:03:00+01:00",
+                    "realtime": True,
+                    "destinationDisplay": {"frontText": "Oslo S"},
+                    "quay": {"id": "Q1", "name": "1"},
                 }],
             }
         }
         result = module.build_display_payload(vehicles, departures, now=now)
         self.assertEqual(result["vehicle_count"], 1)
         self.assertEqual(result["matched_vehicle_count"], 1)
+        self.assertEqual(result["matched_departure_count"], 1)
+        self.assertEqual(result["departure_count"], 1)
         self.assertEqual(result["vehicles"][0]["freshness"], "fresh")
         self.assertEqual(len(result["vehicles"][0]["stop_departures"]), 1)
+        self.assertEqual(result["departures"][0]["destination"], "Oslo S")
+        self.assertEqual(result["departures"][0]["quay"]["name"], "1")
+        self.assertEqual(result["departures"][0]["matched_vehicles"][0]["vehicle_id"], "train-1")
+
+    def test_keeps_unmatched_departures_on_the_board(self):
+        module = load_script("normalize_display", "normalize_display.py")
+        vehicles = {"results": {"VYX": {"vehicles": []}}}
+        departures = {"stop": {"id": "NSR:StopPlace:1", "name": "Test", "estimatedCalls": [
+            {
+                "serviceJourney": {"id": "journey-unmatched"},
+                "expectedDepartureTime": "2026-11-06T12:05:00+01:00",
+                "destinationDisplay": {"frontText": "Oslo"},
+                "quay": {"name": "A"},
+            }
+        ]}}
+        result = module.build_display_payload(vehicles, departures)
+        self.assertEqual(result["departure_count"], 1)
+        self.assertEqual(result["matched_departure_count"], 0)
+        self.assertEqual(result["departures"][0]["destination"], "Oslo")
+        self.assertEqual(result["departures"][0]["matched_vehicles"], [])
 
     def test_marks_old_positions_stale_and_keeps_unmatched_vehicles(self):
         module = load_script("normalize_display", "normalize_display.py")
