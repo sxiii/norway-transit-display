@@ -11,6 +11,7 @@ This independent research project is not affiliated with Entur, Vy, Ruter, or th
 - [Research notes](docs/RESEARCH.md): endpoints, feed coverage, APK observations, confidence levels, and limitations.
 - `scripts/entur_vehicles.py`: real-time vehicle-position snapshots.
 - `scripts/entur_departures.py`: upcoming departures at a supplied Entur stop-place ID, including service-journey IDs.
+- `scripts/normalize_display.py`: joins vehicle positions and stop departures by service-journey ID and emits a display-ready JSON model with position freshness.
 - `scripts/ruter_probe.py`: anonymous-token and harmless GraphQL connectivity probe.
 - `.github/workflows/collect-vehicle-data.yml`: scheduled and manually-triggered collection.
 - `tests/`: offline unit tests.
@@ -22,6 +23,7 @@ Python 3.11+; no third-party packages required.
 ```bash
 ET_CLIENT_NAME=github-sxiii-norway-transit-display python scripts/entur_vehicles.py --codespaces VYG VYX --output vehicles.json
 python scripts/entur_departures.py --stop-place-id 'NSR:StopPlace:YOUR_ID'
+python scripts/normalize_display.py --vehicles vehicles.json --departures stop-departures.json --output display.json
 python scripts/ruter_probe.py
 python -m unittest discover -s tests -v
 ```
@@ -34,7 +36,7 @@ JSON output is uploaded as an artifact, not committed to the repository. Artifac
 
 ## Next development stage
 
-The departure-board response includes service-journey identifiers. The next integration step is to correlate these with the Entur vehicle feed, then normalize the current/next stop, delay, position and freshness into one display-ready model. The stop-place ID is intentionally configurable; do not assume one ID works for every station or operator.
+The normalizer now correlates vehicle updates and departure calls by service-journey ID when both snapshots are supplied. It emits a display-ready JSON structure with coordinates, delay, destination, departure details and a freshness classification. A scheduled run without a stop ID still produces a vehicle-only model; a manual run can add a stop board. The next step is to validate the join against a live stop and build a renderer. The stop-place ID remains configurable.
 
 ## Limitations
 
