@@ -2,6 +2,11 @@ name: Collect Norwegian vehicle positions
 
 on:
   workflow_dispatch:
+    inputs:
+      stop_place_id:
+        description: "Optional Entur stop-place ID (e.g. NSR:StopPlace:...)"
+        required: false
+        type: string
   schedule:
     - cron: "7,22,37,52 * * * *"
   push:
@@ -34,15 +39,21 @@ jobs:
         run: python -m unittest discover -s tests -v
 
       - name: Query Entur vehicle positions
-        id: entur
         env:
           ET_CLIENT_NAME: github-sxiii-norway-transit-display
         run: |
           mkdir -p data
           python scripts/entur_vehicles.py --codespaces VYG VYX --output data/vehicles.json
 
+      - name: Fetch stop departures (optional)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.stop_place_id != '' }}
+        env:
+          ET_CLIENT_NAME: github-sxiii-norway-transit-display
+          STOP_PLACE_ID: ${{ inputs.stop_place_id }}
+        run: |
+          python scripts/entur_departures.py --stop-place-id "$STOP_PLACE_ID" --output data/stop-departures.json
+
       - name: Probe Ruter GraphQL endpoint
-        id: ruter
         continue-on-error: true
         run: python scripts/ruter_probe.py > data/ruter-probe.json
 
@@ -51,7 +62,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: norway-transit-${{ github.run_number }}
-          path: |
-            data/
+          path: data/
           if-no-files-found: warn
           retention-days: 14
