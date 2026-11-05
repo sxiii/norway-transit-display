@@ -57,6 +57,13 @@ jobs:
         continue-on-error: true
         run: python scripts/ruter_probe.py > data/ruter-probe.json
 
+      - name: Build normalized display model
+        if: always()
+        run: |
+          if [ -f data/vehicles.json ]; then
+            python scripts/normalize_display.py --vehicles data/vehicles.json --departures data/stop-departures.json --output data/display.json
+          fi
+
       - name: Upload collected data
         if: always()
         uses: actions/upload-artifact@v4
