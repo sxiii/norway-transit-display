@@ -31,29 +31,26 @@ def build_display_payload(
     now = now or datetime.now(timezone.utc)
     departures_by_journey: dict[str, list[dict[str, Any]]] = {}
     stop = (departure_snapshot or {}).get("stop") or {}
-    for call in stop.get("estimatedCalls") or []:
-        journey = call.get("serviceJourney") or {}
-        journey_id = journey.get("id")
+    calls = stop.get("estimatedCalls") or []
+    for call in calls:
+        journey_id = ((call.get("serviceJourney") or {}).get("id"))
         if journey_id:
             departures_by_journey.setdefault(journey_id, []).append(call)
 
     vehicles: list[dict[str, Any]] = []
+    vehicles_by_journey: dict[str, list[dict[str, Any]]] = {}
     for codespace, result in (vehicle_snapshot.get("results") or {}).items():
         for vehicle in result.get("vehicles") or []:
-            journey = vehicle.get("serviceJourney") or {}
-            journey_id = journey.get("id")
-            updated = vehicle.get("lastUpdated")
-            updated_at = parse_time(updated)
-            age = None
-            if updated_at:
-                age = max(0, int((now - updated_at).total_seconds()))
+            journey_id = ((vehicle.get("serviceJourney") or {}).get("id"))
+            updated_at = parse_time(vehicle.get("lastUpdated"))
+            age = max(0, int((now - updated_at).total_seconds())) if updated_at else None
             freshness = (
                 "unknown" if age is None
                 else "stale" if age > stale_after_seconds
                 else "fresh"
             )
             matched_calls = departures_by_journey.get(journey_id, []) if journey_id else []
-            vehicles.append({
+            normalized = {
                 "operator_codespace": codespace,
                 "vehicle_id": vehicle.get("vehicleId"),
                 "service_journey_id": journey_id,
@@ -62,18 +59,41 @@ def build_display_payload(
                 "destination": vehicle.get("destinationName"),
                 "delay_seconds": vehicle.get("delay"),
                 "location": vehicle.get("location"),
-                "last_updated": updated,
+                "last_updated": vehicle.get("lastUpdated"),
                 "position_age_seconds": age,
                 "freshness": freshness,
                 "stop_departures": matched_calls,
-            })
+            }
+            vehicles.append(normalized)
+            if journey_id:
+                vehicles_by_journey.setdefault(journey_id, []).append(normalized)
 
-    vehicles.sort(
-        key=lambda item: (
-            item.get("destination") or "",
-            item.get("vehicle_id") or "",
-        )
-    )
+    vehicles.sort(key=lambda item: (
+        item.get("destination") or "",
+        item.get("vehicle_id") or "",
+    ))
+
+    departures: list[dict[str, Any]] = []
+    for call in calls:
+        journey_id = ((call.get("serviceJourney") or {}).get("id"))
+        matched = vehicles_by_journey.get(journey_id, []) if journey_id else []
+        destination = ((call.get("destinationDisplay") or {}).get("frontText"))
+        departures.append({
+            "service_journey_id": journey_id,
+            "destination": destination or (matched[0].get("destination") if matched else None),
+            "aimed_departure_time": call.get("aimedDepartureTime"),
+            "expected_departure_time": call.get("expectedDepartureTime"),
+            "actual_departure_time": call.get("actualDepartureTime"),
+            "realtime": call.get("realtime"),
+            "quay": call.get("quay"),
+            "matched_vehicles": matched,
+        })
+    departures.sort(key=lambda item: (
+        item.get("expected_departure_time")
+        or item.get("aimed_departure_time")
+        or ""
+    ))
+
     return {
         "generated_at": now.isoformat(),
         "source_collected_at": vehicle_snapshot.get("collected_at"),
@@ -83,6 +103,9 @@ def build_display_payload(
         ),
         "vehicle_count": len(vehicles),
         "matched_vehicle_count": sum(bool(v["stop_departures"]) for v in vehicles),
+        "departure_count": len(departures),
+        "matched_departure_count": sum(bool(d["matched_vehicles"]) for d in departures),
+        "departures": departures,
         "vehicles": vehicles,
         "source_errors": vehicle_snapshot.get("errors") or {},
     }
@@ -109,10 +132,15 @@ def main() -> int:
 
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    output.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
     print(
         f"Normalized {payload['vehicle_count']} vehicles; "
-        f"{payload['matched_vehicle_count']} matched to stop departures"
+        f"{payload['matched_vehicle_count']} vehicles matched; "
+        f"{payload['matched_departure_count']}/{payload['departure_count']} "
+        "departures matched"
     )
     print(f"Wrote {output}")
     return 0
