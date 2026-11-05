@@ -4,8 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       stop_place_id:
-        description: "Optional Entur stop-place ID (e.g. NSR:StopPlace:...)"
+        description: "Entur stop-place ID (defaults to Bjørvika)"
         required: false
+        default: "NSR:StopPlace:3983"
         type: string
   schedule:
     - cron: "7,22,37,52 * * * *"
@@ -45,11 +46,10 @@ jobs:
           mkdir -p data
           python scripts/entur_vehicles.py --codespaces VYG VYX --output data/vehicles.json
 
-      - name: Fetch stop departures (optional)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.stop_place_id != '' }}
+      - name: Fetch Bjørvika stop departures
         env:
           ET_CLIENT_NAME: github-sxiii-norway-transit-display
-          STOP_PLACE_ID: ${{ inputs.stop_place_id }}
+          STOP_PLACE_ID: ${{ inputs.stop_place_id || 'NSR:StopPlace:3983' }}
         run: |
           python scripts/entur_departures.py --stop-place-id "$STOP_PLACE_ID" --output data/stop-departures.json
 
