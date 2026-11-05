@@ -11,7 +11,8 @@ This independent research project is not affiliated with Entur, Vy, Ruter, or th
 - [Research notes](docs/RESEARCH.md): endpoints, feed coverage, APK observations, confidence levels, and limitations.
 - `scripts/entur_vehicles.py`: real-time vehicle-position snapshots.
 - `scripts/entur_departures.py`: upcoming departures at a supplied Entur stop-place ID, including service-journey IDs.
-- `scripts/normalize_display.py`: joins vehicle positions and stop departures by service-journey ID and emits a display-ready JSON model with position freshness.
+- `scripts/normalize_display.py`: joins vehicle positions and stop departures by service-journey ID and emits a display-ready JSON model.
+- `web/index.html`: responsive browser-based passenger departure display.
 - `scripts/ruter_probe.py`: anonymous-token and harmless GraphQL connectivity probe.
 - `.github/workflows/collect-vehicle-data.yml`: scheduled and manually-triggered collection.
 - `tests/`: offline unit tests.
@@ -28,19 +29,29 @@ python scripts/ruter_probe.py
 python -m unittest discover -s tests -v
 ```
 
+## Browser display
+
+1. Download and extract the latest `norway-transit-N` artifact from the [Actions runs](https://github.com/sxiii/norway-transit-display/actions).
+2. Open `web/index.html` in a modern browser.
+3. Choose the extracted `display.json` using **Load display.json**.
+
+The renderer runs locally in your browser. It does not upload the snapshot anywhere. **Show demo layout** previews the design without needing an artifact.
+
 ## GitHub Actions
 
-Open **Actions → Collect Norwegian vehicle positions → Run workflow**. You can optionally enter an Entur `stop_place_id` to fetch a departure board in the same run. Scheduled runs collect VYG/VYX vehicle positions every 15 minutes.
+Open **Actions → Collect Norwegian vehicle positions → Run workflow**. The default departure stop is Bjørvika (`NSR:StopPlace:3983`); you can override it when manually launching the workflow. Scheduled runs collect VYG/VYX vehicle positions and Bjørvika departures every 15 minutes.
 
 JSON output is uploaded as an artifact, not committed to the repository. Artifacts are retained for 14 days. No GitHub secrets are required; requests use the identifying `ET-Client-Name` header.
 
-## Next development stage
+## Current data model
 
-The normalizer now correlates vehicle updates and departure calls by service-journey ID when both snapshots are supplied. It emits a display-ready JSON structure with coordinates, delay, destination, departure details and a freshness classification. A scheduled run without a stop ID still produces a vehicle-only model; a manual run can add a stop board. The next step is to validate the join against a live stop and build a renderer. The stop-place ID remains configurable.
+The normalizer retains the complete stop departure board, including calls without a matching vehicle. Each departure includes its destination, aimed/expected/actual times, quay, service-journey ID and any matched vehicle records. Vehicle records include coordinates, delay, source timestamp and freshness classification. Matching is by exact service-journey ID.
 
 ## Limitations
 
 - A successful API response proves reachability, not that the endpoint is the same backend used by onboard passenger displays.
+- The renderer currently loads a downloaded JSON snapshot; it is not yet a continuously updating WebSocket client.
+- A vehicle may not appear in the position feed or may not match a departure, even when the departure itself is valid.
 - The Ruter endpoint was found by inspecting the passenger APK. Its live availability and subscription behavior are not yet independently confirmed.
 - Do not commit bearer tokens, personal data, APK files, or unredacted API captures.
 
