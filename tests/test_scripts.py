@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import unittest
 from pathlib import Path
 
@@ -56,5 +57,4 @@ class JourneyPlannerTests(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    import json
     unittest.main()
