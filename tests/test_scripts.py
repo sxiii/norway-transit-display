@@ -36,5 +36,25 @@ class RuterScriptTests(unittest.TestCase):
         self.assertTrue(module.ENDPOINT.startswith("https://"))
 
 
+class JourneyPlannerTests(unittest.TestCase):
+    def test_query_includes_service_journey_and_live_times(self):
+        module = load_script("entur_departures", "entur_departures.py")
+        query = module.build_query("NSR:StopPlace:123", 12)
+        self.assertIn('stopPlace(id: "NSR:StopPlace:123")', query)
+        self.assertIn("expectedDepartureTime", query)
+        self.assertIn("serviceJourney { id }", query)
+        self.assertIn("numberOfDepartures: 12", query)
+
+    def test_stop_id_is_escaped_as_graphql_string(self):
+        module = load_script("entur_departures", "entur_departures.py")
+        query = module.build_query('id"\nInjected', 5)
+        self.assertIn(json.dumps('id"\nInjected'), query)
+
+    def test_endpoint_is_https(self):
+        module = load_script("entur_departures", "entur_departures.py")
+        self.assertTrue(module.ENDPOINT.startswith("https://"))
+
+
 if __name__ == "__main__":
+    import json
     unittest.main()
