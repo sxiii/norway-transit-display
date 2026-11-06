@@ -31,7 +31,7 @@ query {{
       actualDepartureTime
       destinationDisplay {{ frontText }}
       quay {{ id name }}
-      serviceJourney {{ id }}
+      serviceJourney {{ id journeyPattern {{ line {{ publicCode name }} }} }}
     }}
   }}
 }}
