@@ -117,7 +117,7 @@ function renderBoard() {
       <div class="destination">${route ? `<span class="route-badge">${esc(route)}</span>` : ""}${esc(destination)}<span class="sub">${vehicle ? esc(vehicle.mode || vehicle.codespace) : " "}</span></div>
       <div class="platform quay">${esc(quay)}</div>
       <div class="status ${delayClass}">${esc(delayText)}<span class="sub">${vehicle ? "Vehicle position available" : "No position match"}</span></div>
-      <div class="vehicle"><span class="pill"><i class="dot ${vehicle ? "" : "warn"}"></i>${esc(vehicleLabel)}</span><span class="sub">${esc(coords)}</span>${vehicle?.source === "Ruter" && vehicle.location?.latitude != null ? `<button type="button" data-map-journey="${esc(journeyId)}">Show map</button>` : ""}</div>
+      <div class="vehicle"><span class="pill" title="${esc(vehicleLabel)}"><i class="dot ${vehicle ? "" : "warn"}"></i><span class="vehicle-id">${esc(vehicleLabel)}</span></span><span class="sub">${esc(coords)}</span>${vehicle?.source === "Ruter" && vehicle.location?.latitude != null ? `<button type="button" data-map-journey="${esc(journeyId)}">Show map</button>` : ""}</div>
     </article>`;
   }).join("");
   $("rows").querySelectorAll("[data-map-journey]").forEach(button => button.addEventListener("click", () => showVehicleMap(button.dataset.mapJourney)));
