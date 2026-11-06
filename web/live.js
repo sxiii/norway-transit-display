@@ -158,170 +158,211 @@ async function refreshEntur() {
   }
 }
 
-const RUTER_DEPARTURES_SUBSCRIPTION = `subscription departuresByLine($id: ID!) {
+const RUTER_DEPARTURES_SUBSCRIPTION = \`subscription departuresByLine($id: ID!) {
   departuresByLine(id: $id) {
     id
     estimatedCalls { serviceJourneyId operatingDate }
   }
-}`;
-const RUTER_PROGRESS_SUBSCRIPTION = `subscription vehicleProgress($id: String!, $date: String!) {
+}\`;
+const RUTER_PROGRESS_SUBSCRIPTION = \`subscription vehicleProgress($id: String!, $date: String!) {
   vehicleProgress(serviceJourneyId: $id, operatingDate: $date) {
     id latitude longitude status quayId atQuay serviceJourneyId stopPositionInJourney
   }
-}`;
+}\`;
 function closeRuterSocket() {
-  if (state.ruterSocket) {
-    try { state.ruterSocket.close(1000, "Ruter reconnect"); } catch {}
-    state.ruterSocket = null;
-  }
-  state.ruterProgress.clear();
-  state.ruterLineSubscriptions.clear();
-  state.ruterJourneySubscriptions.clear();
+  if (state.ruterSocket) { try { state.ruterSocket.close(1000, "Ruter reconnect"); } catch {} state.ruterSocket = null; }
+  state.ruterProgress.clear(); state.ruterLineSubscriptions.clear(); state.ruterJourneySubscriptions.clear();
 }
 async function probeRuter() {
   closeRuterSocket();
   setStatus("ruter-status", "Requesting anonymous token", "working", "No account login is used");
   $("ruter-details").textContent = "Requesting token…";
+  $("ruter-raw").textContent = "No WebSocket messages captured yet.";
   try {
     const tokenData = await gql(CONFIG.ruterUrl, "mutation { getAnonymousCustomerToken_v2 { accessToken } }", ruterHeaders);
     const token = tokenData.getAnonymousCustomerToken_v2?.accessToken;
     if (!token) throw new Error("Token mutation returned no accessToken");
 
-    const lineIds = [...new Set(state.departures
-      .map(call => call.serviceJourney?.journeyPattern?.line?.id)
-      .filter(id => typeof id === "string" && id.startsWith("RUT:Line:")))];
-    if (!lineIds.length) {
-      throw new Error("No Ruter line IDs found in the current Entur departures. Entur returned " +
-        state.departures.length + " calls; only lines with IDs beginning RUT:Line: can be passed to departuresByLine.");
+    // Ruter's departuresByLine ID is quayId|lineId|frontText, not a bare line ID.
+    const ruterKeys = [...new Map(state.departures.flatMap(call => {
+      const quayId = call.quay?.id;
+      const lineId = call.serviceJourney?.journeyPattern?.line?.id;
+      const frontText = call.destinationDisplay?.frontText;
+      if (!quayId || !lineId || !frontText || !lineId.startsWith("RUT:Line:")) return [];
+      const id = [quayId, lineId, frontText].join("|");
+      return [[id, {id, quayId, lineId, frontText}]];
+    })).values()];
+    if (!ruterKeys.length) {
+      throw new Error("No usable Ruter departure keys found. Need quay.id, line.id (RUT:Line:…), and destinationDisplay.frontText on an Entur departure.");
     }
 
     const ws = new WebSocket(CONFIG.ruterUrl.replace(/^https:/, "wss:").replace(/^http:/, "ws:"), "graphql-transport-ws");
     state.ruterSocket = ws;
-    let acknowledged = false, departureUpdates = 0, progressUpdates = 0;
-    const pending = new Map();
+    let acknowledged = false, departureUpdates = 0, progressUpdates = 0, messageCount = 0;
+    let lastType = "none", lastAt = "none";
+    const pending = new Map(), rawMessages = [];
+    const updateDetails = () => {
+      $("ruter-details").textContent =
+        "Anonymous token: acquired\nAuthenticated WebSocket: " + (acknowledged ? "acknowledged" : "waiting") +
+        "\nSocket readyState: " + ws.readyState + " (1 = open)" +
+        "\nComposite quay|line|destination keys submitted: " + ruterKeys.length +
+        "\nWebSocket messages received: " + messageCount +
+        "\nLast message: " + lastType + " at " + lastAt +
+        "\nDeparture updates: " + departureUpdates +
+        "\nService journeys discovered: " + state.ruterJourneySubscriptions.size +
+        "\nVehicle-progress subscriptions sent: " + state.ruterJourneySubscriptions.size +
+        "\nVehicle-progress updates: " + progressUpdates;
+    };
+    const capture = msg => {
+      messageCount++; lastType = msg?.type || "unknown"; lastAt = new Date().toLocaleTimeString();
+      rawMessages.push({receivedAt:new Date().toISOString(), message:msg});
+      if (rawMessages.length > 30) rawMessages.shift();
+      $("ruter-raw").textContent = rawMessages.map((entry,i) =>
+        "["+(i+1)+"] "+entry.receivedAt+"\n"+JSON.stringify(entry.message,null,2)
+      ).join("\n\n").slice(-24000);
+      updateDetails();
+    };
+    const reportErrors = (errors, context) => {
+      if (!Array.isArray(errors) || !errors.length) return false;
+      errors.forEach(error => log("Ruter "+context+" GraphQL error: "+(error.message || JSON.stringify(error))+
+        (error.path ? " · path "+JSON.stringify(error.path) : ""), "error"));
+      setStatus("ruter-status", "GraphQL operation error", "bad",
+        context+": "+errors.map(e=>e.message || "Unknown error").join("; "));
+      return true;
+    };
+    const subscribe = (id, operationName, query, variables) => {
+      pending.set(id, {operationName, variables});
+      ws.send(JSON.stringify({id, type:"subscribe", payload:{operationName, query, variables}}));
+    };
     const timeout = setTimeout(() => {
       if (state.ruterSocket !== ws) return;
-      const journeys = state.ruterJourneySubscriptions.size;
-      $("ruter-details").textContent =
-        "Anonymous token: acquired\nAuthenticated WebSocket: " + (acknowledged ? "connected" : "not acknowledged") +
-        "\nRuter line IDs submitted: " + lineIds.length +
-        "\nDeparture updates: " + departureUpdates +
-        "\nVehicle-progress subscriptions: " + journeys +
-        "\nVehicle-progress updates: " + progressUpdates +
-        "\nThe subscriptions remain open for live updates.";
-      if (departureUpdates || progressUpdates) {
-        setStatus("ruter-status", "Ruter live subscriptions active", "ok",
-          departureUpdates + " departure updates · " + progressUpdates + " vehicle updates");
-        log("Ruter subscriptions active: " + departureUpdates + " departure updates, " + progressUpdates + " vehicle updates.", "success");
-      } else {
+      updateDetails();
+      if (!messageCount) {
+        setStatus("ruter-status", "Connected; no messages received", "working",
+          "No GraphQL messages or keepalives received in 15 seconds");
+        log("Ruter WebSocket is open but has sent no messages after 15 seconds.", "info");
+      } else if (!departureUpdates && !progressUpdates) {
         setStatus("ruter-status", "Subscriptions sent; awaiting data", "working",
-          lineIds.length + " line subscriptions · no payload received yet");
-        log("Ruter subscription requests sent; no data payload received before the initial wait expired.", "info");
+          messageCount+" protocol messages · no data payload yet");
       }
     }, 15000);
 
-    const subscribe = (id, operationName, query, variables) => {
-      ws.send(JSON.stringify({ id, type:"subscribe", payload:{ operationName, query, variables } }));
-    };
     ws.onerror = () => {
       clearTimeout(timeout);
-      setStatus("ruter-status", "WebSocket network error", "bad", "Check browser console for transport details");
+      setStatus("ruter-status", "WebSocket network error", "bad", "Inspect raw diagnostics and browser console");
       log("Ruter WebSocket network error.", "error");
     };
     ws.onclose = event => {
       clearTimeout(timeout);
+      capture({type:"transport_close", code:event.code, reason:event.reason, wasClean:event.wasClean});
       if (state.ruterSocket === ws) {
         state.ruterSocket = null;
-        setStatus("ruter-status", "WebSocket closed", "bad", "Close code " + event.code);
-        log("Ruter WebSocket closed (code " + event.code + ").", "error");
+        setStatus("ruter-status", "WebSocket closed", "bad", "Close code "+event.code+(event.reason ? " · "+event.reason : ""));
+        log("Ruter WebSocket closed (code "+event.code+").", "error");
       }
     };
-    ws.onopen = () => ws.send(JSON.stringify({
-      type:"connection_init",
-      payload:{
-        Authorization:"Bearer " + token,
-        authorization:"Bearer " + token,
-        "client-platform":"android",
-        "client-version":CONFIG.ruterClientVersion,
-        clientPlatform:"android",
-        clientVersion:CONFIG.ruterClientVersion
-      }
-    }));
+    ws.onopen = () => {
+      capture({type:"transport_open", protocol:ws.protocol});
+      ws.send(JSON.stringify({type:"connection_init", payload:{
+        Authorization:"Bearer "+token, authorization:"Bearer "+token,
+        "client-platform":"android", "client-version":CONFIG.ruterClientVersion,
+        clientPlatform:"android", clientVersion:CONFIG.ruterClientVersion
+      }}));
+      log("Ruter WebSocket transport opened; connection_init sent.", "info");
+    };
     ws.onmessage = event => {
       let msg;
-      try { msg = JSON.parse(event.data); } catch { return; }
+      try { msg = JSON.parse(event.data); }
+      catch { capture({type:"unparsed_message", data:String(event.data).slice(0,2000)}); return; }
+      capture(msg);
+
+      if (msg.type === "ping") {
+        ws.send(JSON.stringify({type:"pong", ...(msg.payload === undefined ? {} : {payload:msg.payload})}));
+        log("Ruter sent ping; replied with pong.", "info"); return;
+      }
+      if (msg.type === "pong") return;
       if (msg.type === "connection_ack") {
         acknowledged = true;
-        lineIds.forEach((lineId, index) => {
-          const id = "ruter-line-" + index;
+        ruterKeys.forEach((key,index) => {
+          const id = "ruter-line-"+index;
           state.ruterLineSubscriptions.add(id);
-          pending.set(id, {kind:"departures",lineId});
-          subscribe(id, "departuresByLine", RUTER_DEPARTURES_SUBSCRIPTION, {id:lineId});
+          subscribe(id, "departuresByLine", RUTER_DEPARTURES_SUBSCRIPTION, {id:key.id});
         });
-        setStatus("ruter-status", "Requesting Ruter departures", "working", lineIds.length + " RUT:Line subscriptions");
-        log("Ruter authenticated; subscribed to departuresByLine for " + lineIds.length + " Ruter line IDs.", "success");
-      } else if (msg.type === "next") {
+        setStatus("ruter-status", "Requesting Ruter departures", "working",
+          ruterKeys.length+" quay|line|destination subscriptions");
+        log("Ruter connection acknowledged; submitted "+ruterKeys.length+" composite departuresByLine keys.", "success");
+        updateDetails(); return;
+      }
+      if (msg.type === "next") {
         const operation = pending.get(msg.id);
-        if (!operation) return;
-        const payload = msg.payload?.data;
-        if (operation.kind === "departures") {
-          const result = payload?.departuresByLine;
-          if (!result) {
-            if (msg.payload?.errors?.length) log("Ruter departuresByLine error: " + msg.payload.errors.map(e=>e.message).join("; "), "error");
+        if (!operation) { log("Ruter sent next for unknown subscription ID "+msg.id+".", "info"); return; }
+        const payload = msg.payload || {};
+        if (reportErrors(payload.errors, operation.operationName)) return;
+        const data = payload.data || {};
+        if (operation.operationName === "departuresByLine") {
+          const result = data.departuresByLine;
+          if (result == null) {
+            log("Ruter departuresByLine payload lacks data.departuresByLine: "+JSON.stringify(payload).slice(0,1200), "error");
             return;
           }
           departureUpdates++;
-          const calls = result.estimatedCalls || [];
-          calls.forEach((call, index) => {
+          const calls = Array.isArray(result.estimatedCalls) ? result.estimatedCalls : [];
+          calls.forEach(call => {
             if (!call.serviceJourneyId || !call.operatingDate) return;
-            const key = call.serviceJourneyId + "|" + call.operatingDate;
+            const key = call.serviceJourneyId+"|"+call.operatingDate;
             if (state.ruterJourneySubscriptions.has(key)) return;
             state.ruterJourneySubscriptions.add(key);
-            const subId = "ruter-progress-" + state.ruterJourneySubscriptions.size;
-            pending.set(subId, {kind:"progress",journeyId:call.serviceJourneyId,operatingDate:call.operatingDate});
-            subscribe(subId, "vehicleProgress", RUTER_PROGRESS_SUBSCRIPTION, {
-              id:call.serviceJourneyId, date:call.operatingDate
-            });
+            const subId = "ruter-progress-"+state.ruterJourneySubscriptions.size;
+            subscribe(subId, "vehicleProgress", RUTER_PROGRESS_SUBSCRIPTION,
+              {id:call.serviceJourneyId, date:call.operatingDate});
           });
-          $("ruter-details").textContent =
-            "Anonymous token: acquired\nAuthenticated WebSocket: connected\nRuter lines queried: " + lineIds.length +
-            "\nDeparture updates received: " + departureUpdates +
-            "\nService journeys found: " + state.ruterJourneySubscriptions.size +
-            "\nVehicle-progress subscriptions sent: " + state.ruterJourneySubscriptions.size +
-            "\nVehicle-progress updates: " + progressUpdates;
+          log("Ruter departuresByLine update: "+calls.length+" calls; "+
+            state.ruterJourneySubscriptions.size+" unique journeys.", "success");
           setStatus("ruter-status", "Ruter departures received", "working",
-            calls.length + " calls · " + state.ruterJourneySubscriptions.size + " journeys");
-          log("Ruter departuresByLine update: " + calls.length + " calls; " + state.ruterJourneySubscriptions.size + " service journeys.", "success");
-        } else if (operation.kind === "progress") {
-          const progress = payload?.vehicleProgress;
+            calls.length+" calls · "+state.ruterJourneySubscriptions.size+" journeys");
+          updateDetails(); return;
+        }
+        if (operation.operationName === "vehicleProgress") {
+          let progress = data.vehicleProgress;
+          if (Array.isArray(progress)) progress = progress[0];
           if (!progress) {
-            if (msg.payload?.errors?.length) log("Ruter vehicleProgress error: " + msg.payload.errors.map(e=>e.message).join("; "), "error");
+            log("Ruter vehicleProgress emitted no progress object: "+JSON.stringify(payload).slice(0,1200), "info");
             return;
           }
           progressUpdates++;
-          const journeyId = progress.serviceJourneyId || operation.journeyId;
+          const journeyId = progress.serviceJourneyId || operation.variables.id;
           state.ruterProgress.set(journeyId, progress);
           renderBoard();
-          $("ruter-details").textContent =
-            "Anonymous token: acquired\nAuthenticated WebSocket: connected\nRuter lines queried: " + lineIds.length +
-            "\nDeparture updates received: " + departureUpdates +
-            "\nService journeys found: " + state.ruterJourneySubscriptions.size +
-            "\nVehicle-progress subscriptions sent: " + state.ruterJourneySubscriptions.size +
-            "\nVehicle-progress updates: " + progressUpdates;
-          setStatus("ruter-status", "Ruter vehicle data live", "ok",
-            progressUpdates + " position updates · " + state.ruterProgress.size + " journeys tracked");
-          log("Ruter vehicleProgress update for " + journeyId + (progress.latitude != null ? " at " + progress.latitude + ", " + progress.longitude : "") + ".", "success");
+          const vehicleRef = progress.vehicleRef || progress.vehicleId || progress.vehicle?.id || null;
+          log("Ruter vehicleProgress for "+journeyId+
+            (vehicleRef ? " · vehicle "+vehicleRef : " · physical vehicle ID not present in selected fields")+
+            (progress.latitude != null ? " · "+progress.latitude+", "+progress.longitude : ""), "success");
+          setStatus("ruter-status", "Ruter vehicle data live",
+            progress.latitude != null && progress.longitude != null ? "ok" : "working",
+            progressUpdates+" progress updates · "+state.ruterProgress.size+" journeys");
+          updateDetails(); return;
         }
-      } else if (msg.type === "error") {
-        const message = JSON.stringify(msg.payload).slice(0,500);
-        setStatus("ruter-status", "Ruter subscription error", "bad", message);
-        log("Ruter GraphQL WebSocket error: " + message, "error");
+      }
+      if (msg.type === "error") {
+        const detail = JSON.stringify(msg.payload || msg).slice(0,1500);
+        reportErrors(Array.isArray(msg.payload) ? msg.payload : null, "subscription");
+        setStatus("ruter-status", "Ruter subscription error", "bad", detail);
+        log("Ruter GraphQL WebSocket error: "+detail, "error"); return;
+      }
+      if (msg.type === "complete") {
+        const operation = pending.get(msg.id);
+        log("Ruter completed subscription "+msg.id+(operation ? " ("+operation.operationName+")" : "")+".", "info");
+        pending.delete(msg.id); updateDetails(); return;
+      }
+      if (msg.type === "connection_error") {
+        setStatus("ruter-status", "Connection initialization rejected", "bad", JSON.stringify(msg.payload).slice(0,1000));
+        log("Ruter connection_error: "+JSON.stringify(msg.payload).slice(0,1000),"error");
       }
     };
   } catch (error) {
     $("ruter-details").textContent = error.message;
     setStatus("ruter-status", "Probe failed", "bad", error.message);
-    log("Ruter probe failed: " + error.message, "error");
+    log("Ruter probe failed: "+error.message, "error");
   }
 }
 $("refresh").addEventListener("click", refreshEntur);
