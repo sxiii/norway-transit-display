@@ -10,7 +10,7 @@ const CONFIG = {
 };
 
 const $ = (id) => document.getElementById(id);
-const state = { timer: null, busy: false, departures: [], vehicles: [], lastUpdated: null, stopName: null };
+const state = { timer: null, busy: false, departures: [], vehicles: [], lastUpdated: null, stopName: null, ruterSocket: null, ruterProgress: new Map(), ruterLineSubscriptions: new Set(), ruterJourneySubscriptions: new Set() };
 
 function setStatus(id, label, kind = "neutral", detail = "") {
   const node = $(id);
@@ -59,7 +59,7 @@ function departureQuery(stopId, count) {
       realtime aimedDepartureTime expectedDepartureTime actualDepartureTime
       destinationDisplay { frontText }
       quay { id name }
-      serviceJourney { id journeyPattern { line { publicCode name } } }
+      serviceJourney { id journeyPattern { line { id publicCode name } } }
     }
   } }`;
 }
@@ -67,6 +67,16 @@ function flattenVehicles(results) {
   return results.flatMap(({ code, data }) => (data.vehicles || []).map(v => ({
     ...v, codespace: code, journeyId: v.serviceJourney?.id || null
   })));
+}
+function ruterVehicleFor(journeyId) {
+  const progress = state.ruterProgress.get(journeyId);
+  if (!progress) return null;
+  return {
+    source: "Ruter",
+    vehicleId: progress.id || "Ruter",
+    mode: progress.status || "Ruter vehicle",
+    location: { latitude: progress.latitude, longitude: progress.longitude }
+  };
 }
 function renderBoard() {
   const calls = state.departures;
@@ -86,7 +96,7 @@ function renderBoard() {
   const sorted = [...calls].sort((a,b) => new Date(a.expectedDepartureTime || a.aimedDepartureTime || 0) - new Date(b.expectedDepartureTime || b.aimedDepartureTime || 0));
   $("rows").innerHTML = sorted.map(call => {
     const journeyId = call.serviceJourney?.id;
-    const vehicle = journeyId ? vehiclesByJourney.get(journeyId)?.[0] : null;
+    const vehicle = journeyId ? (vehiclesByJourney.get(journeyId)?.[0] || ruterVehicleFor(journeyId)) : null;
     const expected = call.expectedDepartureTime || call.aimedDepartureTime || call.actualDepartureTime;
     const time = expected ? new Intl.DateTimeFormat(undefined,{hour:"2-digit",minute:"2-digit"}).format(new Date(expected)) : "—";
     const delay = vehicle?.delay;
@@ -100,7 +110,7 @@ function renderBoard() {
     const destination = call.destinationDisplay?.frontText || "Destination unavailable";
     const route = call.serviceJourney?.journeyPattern?.line?.publicCode || call.serviceJourney?.journeyPattern?.line?.name || "";
     const quay = call.quay?.name || call.quay?.id || "—";
-    const vehicleLabel = vehicle?.vehicleId || (vehicle ? "Tracked" : "Not matched");
+    const vehicleLabel = vehicle?.vehicleId || (vehicle?.source === "Ruter" ? "Ruter live" : vehicle ? "Tracked" : "Not matched");
     const coords = vehicle?.location?.latitude != null ? vehicle.location.latitude.toFixed(4) + ", " + vehicle.location.longitude.toFixed(4) : "";
     return `<article class="departure">
       <div class="time">${esc(time)}<span class="sub">${call.realtime ? "Expected" : "Scheduled"}</span></div>
@@ -148,43 +158,171 @@ async function refreshEntur() {
   }
 }
 
-function ruterConnectionProbeQuery() {
-  // Cosmo Router disables schema introspection (__schema / __type).
-  // __typename is a harmless GraphQL meta-field and verifies the authenticated WS path.
-  return "query RuterConnectionProbe { __typename }";
+const RUTER_DEPARTURES_SUBSCRIPTION = `subscription departuresByLine($id: ID!) {
+  departuresByLine(id: $id) {
+    id
+    estimatedCalls { serviceJourneyId operatingDate }
+  }
+}`;
+const RUTER_PROGRESS_SUBSCRIPTION = `subscription vehicleProgress($id: String!, $date: String!) {
+  vehicleProgress(serviceJourneyId: $id, operatingDate: $date) {
+    id latitude longitude status quayId atQuay serviceJourneyId stopPositionInJourney
+  }
+}`;
+function closeRuterSocket() {
+  if (state.ruterSocket) {
+    try { state.ruterSocket.close(1000, "Ruter reconnect"); } catch {}
+    state.ruterSocket = null;
+  }
+  state.ruterProgress.clear();
+  state.ruterLineSubscriptions.clear();
+  state.ruterJourneySubscriptions.clear();
 }
-function ruterWebSocketProbe(token) {
-  return new Promise((resolve, reject) => {
-    let settled = false, acknowledged = false, timer;
+async function probeRuter() {
+  closeRuterSocket();
+  setStatus("ruter-status", "Requesting anonymous token", "working", "No account login is used");
+  $("ruter-details").textContent = "Requesting token…";
+  try {
+    const tokenData = await gql(CONFIG.ruterUrl, "mutation { getAnonymousCustomerToken_v2 { accessToken } }", ruterHeaders);
+    const token = tokenData.getAnonymousCustomerToken_v2?.accessToken;
+    if (!token) throw new Error("Token mutation returned no accessToken");
+
+    const lineIds = [...new Set(state.departures
+      .map(call => call.serviceJourney?.journeyPattern?.line?.id)
+      .filter(id => typeof id === "string" && id.startsWith("RUT:Line:")))];
+    if (!lineIds.length) {
+      throw new Error("No Ruter line IDs found in the current Entur departures. Entur returned " +
+        state.departures.length + " calls; only lines with IDs beginning RUT:Line: can be passed to departuresByLine.");
+    }
+
     const ws = new WebSocket(CONFIG.ruterUrl.replace(/^https:/, "wss:").replace(/^http:/, "ws:"), "graphql-transport-ws");
-    const finish = (error, result) => {
-      if (settled) return;
-      settled = true; clearTimeout(timer);
-      try { ws.close(1000, "Probe complete"); } catch {}
-      error ? reject(error) : resolve(result);
+    state.ruterSocket = ws;
+    let acknowledged = false, departureUpdates = 0, progressUpdates = 0;
+    const pending = new Map();
+    const timeout = setTimeout(() => {
+      if (state.ruterSocket !== ws) return;
+      const journeys = state.ruterJourneySubscriptions.size;
+      $("ruter-details").textContent =
+        "Anonymous token: acquired\nAuthenticated WebSocket: " + (acknowledged ? "connected" : "not acknowledged") +
+        "\nRuter line IDs submitted: " + lineIds.length +
+        "\nDeparture updates: " + departureUpdates +
+        "\nVehicle-progress subscriptions: " + journeys +
+        "\nVehicle-progress updates: " + progressUpdates +
+        "\nThe subscriptions remain open for live updates.";
+      if (departureUpdates || progressUpdates) {
+        setStatus("ruter-status", "Ruter live subscriptions active", "ok",
+          departureUpdates + " departure updates · " + progressUpdates + " vehicle updates");
+        log("Ruter subscriptions active: " + departureUpdates + " departure updates, " + progressUpdates + " vehicle updates.", "success");
+      } else {
+        setStatus("ruter-status", "Subscriptions sent; awaiting data", "working",
+          lineIds.length + " line subscriptions · no payload received yet");
+        log("Ruter subscription requests sent; no data payload received before the initial wait expired.", "info");
+      }
+    }, 15000);
+
+    const subscribe = (id, operationName, query, variables) => {
+      ws.send(JSON.stringify({ id, type:"subscribe", payload:{ operationName, query, variables } }));
     };
-    timer = setTimeout(() => finish(new Error(acknowledged ? "WebSocket opened but GraphQL probe timed out" : "WebSocket connection acknowledgement timed out")), 12000);
-    ws.onerror = () => finish(new Error("WebSocket network error (browser console may contain CORS/network details)"));
-    ws.onclose = event => { if (!settled) finish(new Error("WebSocket closed before probe completed (code " + event.code + ")")); };
-    ws.onopen = () => ws.send(JSON.stringify({ type:"connection_init", payload:{ Authorization:"Bearer " + token, authorization:"Bearer " + token, "client-platform":"android", "client-version":CONFIG.ruterClientVersion, clientPlatform:"android", clientVersion:CONFIG.ruterClientVersion } }));
+    ws.onerror = () => {
+      clearTimeout(timeout);
+      setStatus("ruter-status", "WebSocket network error", "bad", "Check browser console for transport details");
+      log("Ruter WebSocket network error.", "error");
+    };
+    ws.onclose = event => {
+      clearTimeout(timeout);
+      if (state.ruterSocket === ws) {
+        state.ruterSocket = null;
+        setStatus("ruter-status", "WebSocket closed", "bad", "Close code " + event.code);
+        log("Ruter WebSocket closed (code " + event.code + ").", "error");
+      }
+    };
+    ws.onopen = () => ws.send(JSON.stringify({
+      type:"connection_init",
+      payload:{
+        Authorization:"Bearer " + token,
+        authorization:"Bearer " + token,
+        "client-platform":"android",
+        "client-version":CONFIG.ruterClientVersion,
+        clientPlatform:"android",
+        clientVersion:CONFIG.ruterClientVersion
+      }
+    }));
     ws.onmessage = event => {
       let msg;
       try { msg = JSON.parse(event.data); } catch { return; }
       if (msg.type === "connection_ack") {
         acknowledged = true;
-        ws.send(JSON.stringify({ id:"connection-probe", type:"subscribe", payload:{ operationName:"RuterConnectionProbe", query:ruterConnectionProbeQuery() } }));
-      } else if (msg.type === "next" && msg.id === "connection-probe") {
-        const typename = msg.payload?.data?.__typename;
-        if (!typename) {
-          const errors = msg.payload?.errors;
-          finish(new Error("Ruter WebSocket probe returned no __typename" + (errors?.length ? ": " + errors.map(e=>e.message).join("; ") : "")));
-          return;
+        lineIds.forEach((lineId, index) => {
+          const id = "ruter-line-" + index;
+          state.ruterLineSubscriptions.add(id);
+          pending.set(id, {kind:"departures",lineId});
+          subscribe(id, "departuresByLine", RUTER_DEPARTURES_SUBSCRIPTION, {id:lineId});
+        });
+        setStatus("ruter-status", "Requesting Ruter departures", "working", lineIds.length + " RUT:Line subscriptions");
+        log("Ruter authenticated; subscribed to departuresByLine for " + lineIds.length + " Ruter line IDs.", "success");
+      } else if (msg.type === "next") {
+        const operation = pending.get(msg.id);
+        if (!operation) return;
+        const payload = msg.payload?.data;
+        if (operation.kind === "departures") {
+          const result = payload?.departuresByLine;
+          if (!result) {
+            if (msg.payload?.errors?.length) log("Ruter departuresByLine error: " + msg.payload.errors.map(e=>e.message).join("; "), "error");
+            return;
+          }
+          departureUpdates++;
+          const calls = result.estimatedCalls || [];
+          calls.forEach((call, index) => {
+            if (!call.serviceJourneyId || !call.operatingDate) return;
+            const key = call.serviceJourneyId + "|" + call.operatingDate;
+            if (state.ruterJourneySubscriptions.has(key)) return;
+            state.ruterJourneySubscriptions.add(key);
+            const subId = "ruter-progress-" + state.ruterJourneySubscriptions.size;
+            pending.set(subId, {kind:"progress",journeyId:call.serviceJourneyId,operatingDate:call.operatingDate});
+            subscribe(subId, "vehicleProgress", RUTER_PROGRESS_SUBSCRIPTION, {
+              id:call.serviceJourneyId, date:call.operatingDate
+            });
+          });
+          $("ruter-details").textContent =
+            "Anonymous token: acquired\nAuthenticated WebSocket: connected\nRuter lines queried: " + lineIds.length +
+            "\nDeparture updates received: " + departureUpdates +
+            "\nService journeys found: " + state.ruterJourneySubscriptions.size +
+            "\nVehicle-progress subscriptions sent: " + state.ruterJourneySubscriptions.size +
+            "\nVehicle-progress updates: " + progressUpdates;
+          setStatus("ruter-status", "Ruter departures received", "working",
+            calls.length + " calls · " + state.ruterJourneySubscriptions.size + " journeys");
+          log("Ruter departuresByLine update: " + calls.length + " calls; " + state.ruterJourneySubscriptions.size + " service journeys.", "success");
+        } else if (operation.kind === "progress") {
+          const progress = payload?.vehicleProgress;
+          if (!progress) {
+            if (msg.payload?.errors?.length) log("Ruter vehicleProgress error: " + msg.payload.errors.map(e=>e.message).join("; "), "error");
+            return;
+          }
+          progressUpdates++;
+          const journeyId = progress.serviceJourneyId || operation.journeyId;
+          state.ruterProgress.set(journeyId, progress);
+          renderBoard();
+          $("ruter-details").textContent =
+            "Anonymous token: acquired\nAuthenticated WebSocket: connected\nRuter lines queried: " + lineIds.length +
+            "\nDeparture updates received: " + departureUpdates +
+            "\nService journeys found: " + state.ruterJourneySubscriptions.size +
+            "\nVehicle-progress subscriptions sent: " + state.ruterJourneySubscriptions.size +
+            "\nVehicle-progress updates: " + progressUpdates;
+          setStatus("ruter-status", "Ruter vehicle data live", "ok",
+            progressUpdates + " position updates · " + state.ruterProgress.size + " journeys tracked");
+          log("Ruter vehicleProgress update for " + journeyId + (progress.latitude != null ? " at " + progress.latitude + ", " + progress.longitude : "") + ".", "success");
         }
-        ws.send(JSON.stringify({id:"schema-probe",type:"complete"}));
-        finish(null, { typename });
-      } else if (msg.type === "error") finish(new Error("Ruter GraphQL WebSocket error: " + JSON.stringify(msg.payload).slice(0,400)));
+      } else if (msg.type === "error") {
+        const message = JSON.stringify(msg.payload).slice(0,500);
+        setStatus("ruter-status", "Ruter subscription error", "bad", message);
+        log("Ruter GraphQL WebSocket error: " + message, "error");
+      }
     };
-  });
+  } catch (error) {
+    $("ruter-details").textContent = error.message;
+    setStatus("ruter-status", "Probe failed", "bad", error.message);
+    log("Ruter probe failed: " + error.message, "error");
+  }
 }
 async function probeRuter() {
   setStatus("ruter-status", "Requesting anonymous token", "working", "No account login is used");
