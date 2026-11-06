@@ -384,6 +384,12 @@ function routeLabelForJourney(journeyId) {
  const destination=call.destinationDisplay?.frontText||"";
  return [route,destination].filter(Boolean).join(" ")||"Ruter bus";
 }
+function clearVehicleMarkers(){
+ if(state.mapMarker&&state.map)state.map.removeLayer(state.mapMarker);
+ state.mapMarker=null;
+ if(state.map)for(const marker of state.allBusMarkers.values())state.map.removeLayer(marker);
+ state.allBusMarkers.clear();state.allBusMarkersFitted=false;
+}
 function updateAllVehicleMarkers() {
  initVehicleMap();if(!state.map)return;
  const bounds=[];let count=0;
@@ -415,15 +421,14 @@ function updateVehicleMap(progress) {
  setTimeout(()=>state.map?.invalidateSize(),0);
 }
 function showAllSyncedBuses(){
- state.mapMode="all";state.selectedMapJourney=null;state.mapMarker=null;state.allBusMarkers.clear();state.allBusMarkersFitted=false;
+ clearVehicleMarkers();state.mapMode="all";state.selectedMapJourney=null;
  $("map-panel").hidden=false;$("map-title").textContent="ALL SYNCED BUSES · LIVE";
  updateAllVehicleMarkers();setTimeout(()=>state.map?.invalidateSize(),50);
  $("map-panel").scrollIntoView({behavior:"smooth",block:"nearest"});
 }
 function showVehicleMap(journeyId){
  const p=state.ruterProgress.get(journeyId);if(!p)return;
- state.mapMode="single";state.selectedMapJourney=journeyId;$("map-panel").hidden=false;
- state.mapMarker=null;state.allBusMarkers.clear();state.allBusMarkersFitted=false;
+ clearVehicleMarkers();state.mapMode="single";state.selectedMapJourney=journeyId;$("map-panel").hidden=false;
  $("map-title").textContent=routeLabelForJourney(journeyId)+" · LIVE BUS";
  updateVehicleMap(p);setTimeout(()=>state.map?.invalidateSize(),50);
  $("map-panel").scrollIntoView({behavior:"smooth",block:"nearest"});
@@ -451,7 +456,8 @@ function setupStopSearch(){
  $("stop-search").addEventListener("input",()=>{const q=$("stop-search").value.trim();clearTimeout(state.searchTimer);if(q.length<2){$("stop-suggestions").hidden=true;return;}state.searchTimer=setTimeout(()=>searchStops(q),180);});
  document.addEventListener("click",e=>{if(!e.target.closest(".stop-search-wrap"))$("stop-suggestions").hidden=true;});
 }
-$("map-center").addEventListener("click",()=>{const p=state.selectedMapJourney&&state.ruterProgress.get(state.selectedMapJourney);if(p)updateVehicleMap(p);});
+$("map-center").addEventListener("click",()=>{if(state.mapMode==="all"){const bounds=[...state.allBusMarkers.values()].map(marker=>marker.getLatLng());if(bounds.length)state.map.fitBounds(bounds,{padding:[28,28],maxZoom:15});}else{const p=state.selectedMapJourney&&state.ruterProgress.get(state.selectedMapJourney);if(p)updateVehicleMap(p);}});
+$("ruter-all-map").addEventListener("click",showAllSyncedBuses);
 $("map-close").addEventListener("click",()=>{$("map-panel").hidden=true;});
 $("map-fullscreen").addEventListener("click",async()=>{try{if(!document.fullscreenElement)await $("map-panel").requestFullscreen();else await document.exitFullscreen();}catch(e){log("Fullscreen unavailable: "+e.message,"error");}});
 document.addEventListener("fullscreenchange",()=>{$("map-fullscreen").textContent=document.fullscreenElement?"Exit fullscreen":"Fullscreen";setTimeout(()=>state.map?.invalidateSize(),80);});
