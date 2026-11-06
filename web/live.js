@@ -148,17 +148,10 @@ async function refreshEntur() {
   }
 }
 
-function introspectionQuery() {
-  return `query RuterSubscriptionIntrospection {
-    __type(name: "Subscription") {
-      name
-      fields {
-        name
-        args { name type { kind name ofType { kind name ofType { kind name } } } }
-        type { kind name ofType { kind name ofType { kind name } } }
-      }
-    }
-  }`;
+function ruterConnectionProbeQuery() {
+  // Cosmo Router disables schema introspection (__schema / __type).
+  // __typename is a harmless GraphQL meta-field and verifies the authenticated WS path.
+  return "query RuterConnectionProbe { __typename }";
 }
 function ruterWebSocketProbe(token) {
   return new Promise((resolve, reject) => {
@@ -179,13 +172,16 @@ function ruterWebSocketProbe(token) {
       try { msg = JSON.parse(event.data); } catch { return; }
       if (msg.type === "connection_ack") {
         acknowledged = true;
-        ws.send(JSON.stringify({ id:"schema-probe", type:"subscribe", payload:{ operationName:"RuterSubscriptionIntrospection", query:introspectionQuery() } }));
+        ws.send(JSON.stringify({ id:"schema-probe", type:"subscribe", payload:{ operationName:"RuterSubscriptionIntrospection", query:ruterConnectionProbeQuery() } }));
       } else if (msg.type === "next" && msg.id === "schema-probe") {
-        const fields = msg.payload?.data?.__type?.fields || [];
-        const vehicleProgress = fields.find(field => field.name === "vehicleProgress");
-        const departuresByLine = fields.find(field => field.name === "departuresByLine");
+        const typename = msg.payload?.data?.__typename;
+        if (!typename) {
+          const errors = msg.payload?.errors;
+          finish(new Error("Ruter WebSocket probe returned no __typename" + (errors?.length ? ": " + errors.map(e=>e.message).join("; ") : "")));
+          return;
+        }
         ws.send(JSON.stringify({id:"schema-probe",type:"complete"}));
-        finish(null, { fieldCount:fields.length, vehicleProgress, departuresByLine, fieldNames:fields.map(f=>f.name) });
+        finish(null, { typename });
       } else if (msg.type === "error") finish(new Error("Ruter GraphQL WebSocket error: " + JSON.stringify(msg.payload).slice(0,400)));
     };
   });
@@ -201,17 +197,16 @@ async function probeRuter() {
     log("Ruter anonymous token acquired (value deliberately not displayed or stored).", "success");
     const schema = await ruterWebSocketProbe(token);
     const details = [
-      "Subscription fields discovered: " + schema.fieldCount,
-      "vehicleProgress: " + (schema.vehicleProgress ? "present" : "not exposed"),
-      schema.vehicleProgress ? "vehicleProgress arguments: " + schema.vehicleProgress.args.map(a=>a.name + ":" + typeName(a.type)).join(", ") : "",
-      "departuresByLine: " + (schema.departuresByLine ? "present" : "not exposed"),
-      schema.departuresByLine ? "departuresByLine arguments: " + schema.departuresByLine.args.map(a=>a.name + ":" + typeName(a.type)).join(", ") : ""
-    ].filter(Boolean).join("\n");
+      "Anonymous token: acquired",
+      "Authenticated WebSocket: connected",
+      "GraphQL probe: __typename = " + schema.typename,
+      "Schema introspection is disabled by Ruter's Cosmo Router; real app operations must be tested directly."
+    ].join("\n");
     $("ruter-details").textContent = details;
-    setStatus("ruter-status", "WebSocket + schema OK", "ok", "Anonymous token and subscription schema introspection succeeded");
-    log("Ruter WebSocket connected; Subscription schema introspection succeeded.", "success");
+    setStatus("ruter-status", "WebSocket + GraphQL OK", "ok", "Anonymous token and authenticated GraphQL request succeeded");
+    log("Ruter authenticated WebSocket and GraphQL probe succeeded (__typename: " + schema.typename + ").", "success");
   } catch (error) {
-    $("ruter-details").textContent = error.message + "\nIf this is a browser CORS/network restriction, a small Cloudflare Worker can proxy the request.";
+    $("ruter-details").textContent = error.message;
     setStatus("ruter-status", "Probe failed", "bad", error.message);
     log("Ruter probe failed: " + error.message, "error");
   }
