@@ -39,7 +39,7 @@ input[type=file]{display:none}.check{display:flex;align-items:center;gap:7px;col
 .pill{display:inline-flex;align-items:center;gap:7px;border-radius:99px;padding:7px 10px;background:#3a2031;color:#f0c8dc;font-size:12px;font-weight:750;max-width:100%;overflow-wrap:anywhere}
 .dot{width:7px;height:7px;border-radius:50%;background:#f18abb;flex:none}.dot.warn{background:#ff9ac4}
 .empty{padding:55px 25px;text-align:center;color:#c9a8ba}.empty strong{display:block;color:#fff2f7;font-size:22px;margin-bottom:8px}
-#ruter-details{white-space:pre-wrap;color:#c9a8ba;font-size:12px;margin-top:10px;overflow-wrap:anywhere}
+#ruter-details{white-space:pre-wrap;color:#c9a8ba;font-size:12px;margin-top:10px;overflow-wrap:anywhere}#ruter-debug{margin-top:10px;font-size:12px;color:#c9a8ba}#ruter-debug summary{cursor:pointer;color:#f0c7dc}#ruter-raw{white-space:pre-wrap;overflow-wrap:anywhere;max-height:360px;overflow:auto;margin-top:8px;padding:10px;background:#160d13;border:1px solid #49303e;border-radius:8px;color:#e5d5de}
 .log{max-height:145px;overflow:auto;font:12px/1.55 ui-monospace,monospace;color:#c29aaf}
 .log-entry{padding:2px 0}.log-entry.error{color:#ff9abd}.log-entry.success{color:#f1a1c8}
 footer{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;color:#ad8298;font-size:12px;margin-top:18px}
@@ -69,7 +69,7 @@ footer{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;color:
   </div>
   <div class="providers">
     <div class="provider"><h3>Entur · Public APIs</h3><div id="entur-status" class="status-line working"><div><span class="status-label">Connecting</span><span class="status-detail">Journey Planner + VYG/VYX vehicle positions</span></div></div></div>
-    <div class="provider"><h3>Ruter · App GraphQL API</h3><div id="ruter-status" class="status-line"><div><span class="status-label">Not tested</span><span class="status-detail">Anonymous token + live departuresByLine / vehicleProgress subscriptions</span></div></div><div id="ruter-details">Ruter probe is manual. No account credentials are used; the anonymous token is kept in memory and never displayed.</div><div style="margin-top:10px"><button id="ruter-probe" type="button">Connect Ruter live data</button></div></div>
+    <div class="provider"><h3>Ruter · App GraphQL API</h3><div id="ruter-status" class="status-line"><div><span class="status-label">Not tested</span><span class="status-detail">Anonymous token + live departuresByLine / vehicleProgress subscriptions</span></div></div><div id="ruter-details">Ruter probe is manual. No account credentials are used; the anonymous token is kept in memory and never displayed.</div><details id="ruter-debug"><summary>WebSocket diagnostics · raw messages</summary><pre id="ruter-raw">No WebSocket messages captured yet.</pre></details><div style="margin-top:10px"><button id="ruter-probe" type="button">Connect Ruter live data</button></div></div>
   </div>
 </section>
 <section class="board">
