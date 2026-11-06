@@ -107,7 +107,9 @@ Static strings and operation names observed:
 
 The observed `vehicleProgress` subscription takes a service-journey identifier and operating date. The likely workflow is to discover a departure/service journey first, then subscribe to its vehicle progress.
 
-**Not verified:** DNS/network reachability from the analysis environment, token exchange, GraphQL schema, live subscription behavior, or whether the service is intended for third-party use. A previous network attempt failed at DNS resolution, so this is an APK-derived lead, not a confirmed live endpoint.
+**Verified from the browser probe:** the anonymous-token mutation succeeds and the authenticated GraphQL WebSocket responds. Cosmo Router explicitly disables schema introspection (`__schema` / `__type`), so introspection errors must not be interpreted as network or CORS failures. The browser probe now uses the harmless `__typename` meta-field to verify the authenticated WebSocket path.
+
+**Not yet verified:** the live `departuresByLine` and `vehicleProgress` subscription payloads, returned data, and whether the service is intended for third-party use. The exact operation argument/input shapes still need to be validated from app traffic or APK-generated client metadata; do not guess them.
 
 The Ruter app's backend appears separate from the public Entur endpoint. Entur's published coverage table does not list RUT vehicle positions, although Ruter's own app may have a separate vehicle-progress facility.
 
