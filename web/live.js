@@ -10,7 +10,7 @@ const CONFIG = {
 };
 
 const $ = (id) => document.getElementById(id);
-const state = { map: null, mapMarker: null, selectedMapJourney: null, searchTimer: null, searchAbort: null, timer: null, busy: false, departures: [], vehicles: [], lastUpdated: null, stopName: null, ruterSocket: null, ruterAutoStarted: false, ruterProgress: new Map(), ruterLineSubscriptions: new Set(), ruterJourneySubscriptions: new Set() };
+const state = { map: null, mapMarker: null, allBusMarkers: new Map(), allBusMarkersFitted: false, mapMode: "single", selectedMapJourney: null, searchTimer: null, searchAbort: null, timer: null, busy: false, departures: [], vehicles: [], lastUpdated: null, stopName: null, ruterSocket: null, ruterAutoStarted: false, ruterProgress: new Map(), ruterLineSubscriptions: new Set(), ruterJourneySubscriptions: new Set() };
 
 function setStatus(id, label, kind = "neutral", detail = "") {
   const node = $(id);
@@ -335,7 +335,8 @@ async function probeRuter() {
           const journeyId = progress.serviceJourneyId || operation.variables.id;
           state.ruterProgress.set(journeyId, progress);
           renderBoard();
-          if (state.selectedMapJourney === journeyId) updateVehicleMap(progress);
+          if (state.mapMode === "all") updateAllVehicleMarkers();
+          else if (state.selectedMapJourney === journeyId) updateVehicleMap(progress);
           const vehicleRef = progress.vehicleRef || progress.vehicleId || progress.vehicle?.id || null;
           log("Ruter vehicleProgress for "+journeyId+
             (vehicleRef ? " · vehicle "+vehicleRef : " · physical vehicle ID not present in selected fields")+
@@ -376,7 +377,32 @@ function initVehicleMap() {
  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",{maxZoom:16,attribution}).addTo(state.map);
  L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}",{maxZoom:16,attribution}).addTo(state.map);
 }
+function routeLabelForJourney(journeyId) {
+ const call=state.departures.find(item=>item.serviceJourney?.id===journeyId);
+ if(!call)return "Ruter bus";
+ const route=call.serviceJourney?.journeyPattern?.line?.publicCode||call.serviceJourney?.journeyPattern?.line?.name||"";
+ const destination=call.destinationDisplay?.frontText||"";
+ return [route,destination].filter(Boolean).join(" ")||"Ruter bus";
+}
+function updateAllVehicleMarkers() {
+ initVehicleMap();if(!state.map)return;
+ const bounds=[];let count=0;
+ for(const [journeyId,progress] of state.ruterProgress){
+  const lat=Number(progress.latitude),lon=Number(progress.longitude);
+  if(!Number.isFinite(lat)||!Number.isFinite(lon))continue;
+  const point=[lat,lon],label=routeLabelForJourney(journeyId),vin=progress.id||"Ruter bus";
+  let marker=state.allBusMarkers.get(journeyId);
+  if(!marker){marker=L.circleMarker(point,{radius:9,color:"#ffffff",weight:2,fillColor:"#e30613",fillOpacity:1}).addTo(state.map);state.allBusMarkers.set(journeyId,marker);}
+  else marker.setLatLng(point);
+  marker.bindPopup("<b>"+esc(label)+"</b><br>"+esc(vin)+"<br>"+lat.toFixed(5)+", "+lon.toFixed(5));
+  bounds.push(point);count++;
+ }
+ $("map-subtitle").textContent=count+" synced buses with live positions · updates in real time";
+ if(bounds.length&&!state.allBusMarkersFitted){state.map.fitBounds(bounds,{padding:[28,28],maxZoom:15});state.allBusMarkersFitted=true;}
+ setTimeout(()=>state.map?.invalidateSize(),0);
+}
 function updateVehicleMap(progress) {
+ if(state.mapMode==="all"){updateAllVehicleMarkers();return;}
  const lat=Number(progress.latitude),lon=Number(progress.longitude);
  if(!Number.isFinite(lat)||!Number.isFinite(lon))return;
  initVehicleMap();if(!state.map)return;
@@ -388,10 +414,17 @@ function updateVehicleMap(progress) {
  $("map-subtitle").textContent=(progress.id||"Ruter bus")+" · "+lat.toFixed(5)+", "+lon.toFixed(5)+" · "+(progress.status||"Live");
  setTimeout(()=>state.map?.invalidateSize(),0);
 }
+function showAllSyncedBuses(){
+ state.mapMode="all";state.selectedMapJourney=null;state.mapMarker=null;state.allBusMarkers.clear();state.allBusMarkersFitted=false;
+ $("map-panel").hidden=false;$("map-title").textContent="ALL SYNCED BUSES · LIVE";
+ updateAllVehicleMarkers();setTimeout(()=>state.map?.invalidateSize(),50);
+ $("map-panel").scrollIntoView({behavior:"smooth",block:"nearest"});
+}
 function showVehicleMap(journeyId){
  const p=state.ruterProgress.get(journeyId);if(!p)return;
- state.selectedMapJourney=journeyId;$("map-panel").hidden=false;
- $("map-title").textContent=(p.id||"RUTER BUS")+" · LIVE BUS";
+ state.mapMode="single";state.selectedMapJourney=journeyId;$("map-panel").hidden=false;
+ state.mapMarker=null;state.allBusMarkers.clear();state.allBusMarkersFitted=false;
+ $("map-title").textContent=routeLabelForJourney(journeyId)+" · LIVE BUS";
  updateVehicleMap(p);setTimeout(()=>state.map?.invalidateSize(),50);
  $("map-panel").scrollIntoView({behavior:"smooth",block:"nearest"});
 }
