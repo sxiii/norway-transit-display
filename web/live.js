@@ -9,7 +9,7 @@ const CONFIG = {
 };
 
 const $ = (id) => document.getElementById(id);
-const state = { timer: null, busy: false, departures: [], vehicles: [], lastUpdated: null };
+const state = { timer: null, busy: false, departures: [], vehicles: [], lastUpdated: null, stopName: null };
 
 function setStatus(id, label, kind = "neutral", detail = "") {
   const node = $(id);
@@ -106,7 +106,7 @@ function renderBoard() {
       <div class="vehicle"><span class="pill"><i class="dot ${vehicle ? "" : "warn"}"></i>${esc(vehicleLabel)}</span><span class="sub">${esc(coords)}</span></div>
     </article>`;
   }).join("");
-  $("stop-name").textContent = $("stop-id").value.trim();
+  $("stop-name").textContent = state.stopName || $("stop-id").value.trim();
   $("date-label").textContent = "Live data · " + new Date().toLocaleDateString();
   $("updated").textContent = "Last successful refresh: " + new Date(state.lastUpdated).toLocaleTimeString();
 }
@@ -128,7 +128,7 @@ async function refreshEntur() {
     ]);
     const stop = departureData.stopPlace;
     if (!stop) throw new Error("Entur returned no stopPlace for " + stopId);
-    state.departures = stop.estimatedCalls || [];
+    state.stopName = stop.name || stopId;\n    state.departures = stop.estimatedCalls || [];
     state.vehicles = flattenVehicles([{code:"VYG",data:vyg},{code:"VYX",data:vyx}]);
     state.lastUpdated = Date.now();
     $("stop-name").textContent = stop.name || stopId;
@@ -237,7 +237,7 @@ $("file").addEventListener("change", async event => {
       location:{latitude:v.latitude,longitude:v.longitude},
       serviceJourney:{id:v.service_journey_id}, journeyId:v.service_journey_id
     }));
-    state.lastUpdated = Date.now(); renderBoard();
+    state.stopName = data.stop_place?.name || data.stop_place?.id || "Transit departures";\n    state.lastUpdated = Date.now(); renderBoard();
     log("Loaded local snapshot JSON.", "success");
   } catch (error) { log("Could not load JSON: " + error.message, "error"); }
 });
