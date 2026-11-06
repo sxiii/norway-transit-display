@@ -10,7 +10,7 @@ const CONFIG = {
 };
 
 const $ = (id) => document.getElementById(id);
-const state = { map: null, mapMarker: null, selectedMapJourney: null, searchTimer: null, searchAbort: null, timer: null, busy: false, departures: [], vehicles: [], lastUpdated: null, stopName: null, ruterSocket: null, ruterProgress: new Map(), ruterLineSubscriptions: new Set(), ruterJourneySubscriptions: new Set() };
+const state = { map: null, mapMarker: null, selectedMapJourney: null, searchTimer: null, searchAbort: null, timer: null, busy: false, departures: [], vehicles: [], lastUpdated: null, stopName: null, ruterSocket: null, ruterAutoStarted: false, ruterProgress: new Map(), ruterLineSubscriptions: new Set(), ruterJourneySubscriptions: new Set() };
 
 function setStatus(id, label, kind = "neutral", detail = "") {
   const node = $(id);
@@ -151,6 +151,7 @@ async function refreshEntur() {
     renderBoard();
     setStatus("entur-status", "Connected", "ok", stop.name + " · " + state.departures.length + " departures · " + state.vehicles.length + " vehicles");
     log("Entur refreshed: " + state.departures.length + " departures, " + state.vehicles.length + " VYG/VYX vehicles.", "success");
+    if (!state.ruterAutoStarted) { state.ruterAutoStarted = true; probeRuter(); }
   } catch (error) {
     setStatus("entur-status", "Request failed", "bad", error.message);
     log("Entur failed: " + error.message, "error");
@@ -380,7 +381,7 @@ function updateVehicleMap(progress) {
  if(!Number.isFinite(lat)||!Number.isFinite(lon))return;
  initVehicleMap();if(!state.map)return;
  const point=[lat,lon];
- if(!state.mapMarker)state.mapMarker=L.circleMarker(point,{radius:9,color:"#fff2f7",weight:3,fillColor:"#f18abb",fillOpacity:1}).addTo(state.map);
+ if(!state.mapMarker)state.mapMarker=L.circleMarker(point,{radius:9,color:"#ffffff",weight:3,fillColor:"#e30613",fillOpacity:1}).addTo(state.map);
  else state.mapMarker.setLatLng(point);
  state.mapMarker.bindPopup("<b>"+esc(progress.id||"Ruter bus")+"</b><br>"+lat.toFixed(5)+", "+lon.toFixed(5));
  state.map.panTo(point,{animate:false});
@@ -390,7 +391,7 @@ function updateVehicleMap(progress) {
 function showVehicleMap(journeyId){
  const p=state.ruterProgress.get(journeyId);if(!p)return;
  state.selectedMapJourney=journeyId;$("map-panel").hidden=false;
- $("map-title").textContent="Live bus · "+(p.id||"Ruter");
+ $("map-title").textContent=(p.id||"RUTER BUS")+" · LIVE BUS";
  updateVehicleMap(p);setTimeout(()=>state.map?.invalidateSize(),50);
  $("map-panel").scrollIntoView({behavior:"smooth",block:"nearest"});
 }
@@ -398,10 +399,10 @@ async function searchStops(query){
  const box=$("stop-suggestions");if(state.searchAbort)state.searchAbort.abort();
  const controller=new AbortController();state.searchAbort=controller;
  try{
-  const response=await fetch("https://api.entur.io/geocoder/v3/autocomplete?q="+encodeURIComponent(query)+"&lang=en",{headers:{"ET-Client-Name":CONFIG.enturClient,"Accept":"application/json"},signal:controller.signal});
+  const response=await fetch("https://api.entur.io/geocoder/v3/autocomplete?q="+encodeURIComponent(query)+"&lang=en&layers=stopPlace&multimodal=all&limit=12",{headers:{"ET-Client-Name":CONFIG.enturClient,"Accept":"application/json"},signal:controller.signal});
   if(!response.ok)throw new Error("Geocoder HTTP "+response.status);
   const data=await response.json();
-  const stops=(data.features||[]).map(f=>{const p=f.properties||{};return{id:p.id||p.gid||p.identifier,name:p.name||p.label||"Unnamed stop",area:p.locality||p.localadmin||p.county||""};}).filter(x=>x.id&&String(x.id).includes("StopPlace"));
+  const stops=(data.features||[]).map(f=>{const p=f.properties||{},names=p.names||{},address=p.address||{};return{id:p.id||f.id||p.gid||p.identifier,name:names.display||names.default||p.name||p.label||f.text||"",area:address.locality||p.locality||address.county||p.county||""};}).filter(x=>x.id&&String(x.id).includes("StopPlace")&&x.name);
   box.replaceChildren();
   if(!stops.length){box.hidden=false;box.textContent="No matching stops found";return;}
   stops.slice(0,8).forEach(stop=>{
