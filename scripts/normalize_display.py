@@ -80,6 +80,8 @@ def build_display_payload(
         destination = ((call.get("destinationDisplay") or {}).get("frontText"))
         departures.append({
             "service_journey_id": journey_id,
+            "line_public_code": (((call.get("serviceJourney") or {}).get("journeyPattern") or {}).get("line") or {}).get("publicCode"),
+            "line_name": (((call.get("serviceJourney") or {}).get("journeyPattern") or {}).get("line") or {}).get("name"),
             "destination": destination or (matched[0].get("destination") if matched else None),
             "aimed_departure_time": call.get("aimedDepartureTime"),
             "expected_departure_time": call.get("expectedDepartureTime"),
