@@ -51,7 +51,7 @@ class NormalizerTests(unittest.TestCase):
                 "id": "NSR:StopPlace:451",
                 "name": "Lillestrøm",
                 "estimatedCalls": [{
-                    "serviceJourney": {"id": "VYG:ServiceJourney:42"},
+                    "serviceJourney": {"id": "VYG:ServiceJourney:42", "journeyPattern": {"line": {"publicCode": "L1", "name": "Line 1"}}},
                     "expectedDepartureTime": "2026-11-06T12:05:00+01:00",
                     "aimedDepartureTime": "2026-11-06T12:03:00+01:00",
                     "realtime": True,
