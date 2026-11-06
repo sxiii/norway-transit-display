@@ -12,7 +12,7 @@ This independent research project is not affiliated with Entur, Vy, Ruter, or th
 - `scripts/entur_vehicles.py`: real-time vehicle-position snapshots.
 - `scripts/entur_departures.py`: upcoming departures at a supplied Entur stop-place ID, including service-journey IDs.
 - `scripts/normalize_display.py`: joins vehicle positions and stop departures by service-journey ID and emits a display-ready JSON model.
-- `web/index.html` + `web/live.js`: browser-native live display with Entur polling and an experimental Ruter anonymous-token / GraphQL WebSocket probe.
+- `web/index.html` + `web/live.js`: browser-native live display with Entur polling, route-number badges, and an experimental Ruter anonymous-token / GraphQL WebSocket probe.
 - `scripts/ruter_probe.py`: anonymous-token and harmless GraphQL connectivity probe.
 - `.github/workflows/collect-vehicle-data.yml`: scheduled and manually-triggered collection.
 - `tests/`: offline unit tests.
