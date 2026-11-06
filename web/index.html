@@ -46,7 +46,7 @@ footer{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;color:
 @media(max-width:1050px){.board-head,.departure{grid-template-columns:130px minmax(170px,1.5fr) minmax(95px,.7fr) minmax(120px,1fr) minmax(125px,1fr);gap:12px;padding-left:16px;padding-right:16px}}
 @media(max-width:760px){.shell{padding:14px}.board-head{display:none}.departure{grid-template-columns:100px minmax(0,1fr);gap:10px;padding:14px}.departure .platform{grid-column:2}.departure .status{grid-column:1}.departure .vehicle{grid-column:2;grid-row:auto;text-align:left}.time{font-size:21px}.destination{font-size:16px}.quay{font-size:14px}.status{font-size:12px}.stats{gap:8px}.stat{padding:12px}.stat span{font-size:9px}.providers{grid-template-columns:1fr}.header-right{font-size:12px}}
 </style>
-</head>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><style>.stop-search-wrap{position:relative;flex:1;min-width:260px}#stop-search{width:100%;background:#120a10;color:#fff3f8;border:1px solid #684057;border-radius:9px;padding:10px 12px;font:inherit}.suggestions{position:absolute;z-index:1200;top:calc(100% + 5px);left:0;right:0;max-height:300px;overflow:auto;background:#21121d;border:1px solid #70465f;border-radius:10px;box-shadow:0 12px 35px #0009}.suggestion{display:block;width:100%;text-align:left;border:0;border-radius:0;border-bottom:1px solid #49303e;background:transparent;padding:11px 13px}.suggestion small{display:block;color:#c29aaf;font-weight:500;margin-top:3px}.map-panel{padding:12px}.map-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}.map-heading h2{margin:0}.map-subtitle{font-size:12px;color:#c29aaf;margin-top:4px}.map-actions{display:flex;gap:6px;flex-wrap:wrap}.map-actions button{padding:7px 10px}#vehicle-map{height:245px;width:100%;border-radius:10px;background:#21121d;overflow:hidden}.map-panel:fullscreen{background:#10070d;padding:20px;display:flex;flex-direction:column}.map-panel:fullscreen #vehicle-map{height:auto;flex:1;min-height:0}.leaflet-control-attribution{font-size:9px!important;opacity:.75}.departure .vehicle button{margin-top:6px;padding:5px 9px;font-size:11px}@media(max-width:760px){.map-heading{align-items:flex-start;flex-direction:column}#vehicle-map{height:220px}}</style></head>
 <body>
 <main class="shell">
 <header>
@@ -61,7 +61,7 @@ footer{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;color:
 <section class="panel">
   <h2>Live data configuration</h2>
   <div class="controls">
-    <input id="stop-id" type="text" aria-label="Entur stop place ID" placeholder="Entur stop-place ID">
+    <div class="stop-search-wrap"><input id="stop-search" type="text" aria-label="Search bus stop by name" placeholder="Search stop name…" autocomplete="off"><div id="stop-suggestions" class="suggestions" hidden></div><input id="stop-id" type="hidden" value="NSR:StopPlace:4000"></div>
     <label>Calls <input id="departure-limit" type="number" min="1" max="50" value="20"></label>
     <button id="refresh" type="button">Refresh Entur</button>
     <label class="check"><input id="auto-refresh" type="checkbox" checked> Auto-refresh · 30 sec</label>
@@ -76,9 +76,11 @@ footer{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;color:
   <div class="board-head"><div>Time</div><div>Destination</div><div>Platform</div><div>Real-time</div><div>Vehicle</div></div>
   <div id="rows"><div class="empty"><strong>Connecting to Entur</strong>Departure data will appear here when the first request succeeds.</div></div>
 </section>
+<section id="map-panel" class="panel map-panel" hidden><div class="map-heading"><div><h2 id="map-title">Live bus map</h2><div id="map-subtitle" class="map-subtitle">Waiting for vehicle position</div></div><div class="map-actions"><button id="map-center" type="button">Recenter</button><button id="map-fullscreen" type="button">Fullscreen</button><button id="map-close" type="button">Close</button></div></div><div id="vehicle-map" role="img" aria-label="Live bus location map"></div></section>
 <section class="panel"><h2>Diagnostics</h2><div id="log" class="log"></div></section>
 <footer><span>Entur data: Journey Planner + Vehicle Positions · Ruter: experimental app backend</span><span id="updated">Waiting for first update</span></footer>
 </main>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="./live.js"></script>
 </body>
 </html>
