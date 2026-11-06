@@ -52,8 +52,6 @@ The normalizer retains the complete stop departure board, including calls withou
 - A successful API response proves reachability, not that the endpoint is the same backend used by onboard passenger displays.
 - The renderer currently loads a downloaded JSON snapshot; it is not yet a continuously updating WebSocket client.
 - A vehicle may not appear in the position feed or may not match a departure, even when the departure itself is valid.
-- The Ruter endpoint was found by inspecting the passenger APK. Its live availability and subscription behavior are not yet independently confirmed.
-- Do not commit bearer tokens, personal data, APK files, or unredacted API captures.
 
 ## License
 
