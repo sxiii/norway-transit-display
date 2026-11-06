@@ -39,7 +39,7 @@ The renderer runs locally in your browser. It does not upload the snapshot anywh
 
 ## GitHub Actions
 
-Open **Actions → Collect Norwegian vehicle positions → Run workflow**. The default departure stop is Bjørvika (`NSR:StopPlace:3983`); you can override it when manually launching the workflow. Scheduled runs collect VYG/VYX vehicle positions and Bjørvika departures every 15 minutes.
+Open **Actions → Collect Norwegian vehicle positions → Run workflow**. The default departure stop is the central/night-bus stop (`NSR:StopPlace:4000`); you can override it when manually launching the workflow. Scheduled runs collect VYG/VYX vehicle positions and departures from this stop every 15 minutes.
 
 JSON output is uploaded as an artifact, not committed to the repository. Artifacts are retained for 14 days. No GitHub secrets are required; requests use the identifying `ET-Client-Name` header.
 
