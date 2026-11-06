@@ -1,33 +1,82 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><title>Norway Transit Display</title>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Norway Transit Display — Live</title>
 <style>
-:root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:#f4f7fb;background:#07111e;font-synthesis:none}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 15% 0%,#142a42 0,transparent 45%),#07111e}.shell{max-width:1500px;margin:auto;padding:clamp(18px,3vw,42px)}header{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;border-bottom:1px solid #26384c;padding-bottom:22px}.eyebrow{font-size:12px;letter-spacing:.19em;text-transform:uppercase;color:#8fa8c1;font-weight:750}h1{font-size:clamp(34px,5vw,64px);line-height:1;margin:10px 0 0;letter-spacing:-.045em}.header-right{text-align:right;color:#9db0c5;font-size:14px}.clock{font-variant-numeric:tabular-nums;font-size:clamp(24px,3vw,38px);font-weight:750;color:#fff}.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:22px 0}.stat{background:#101f30;border:1px solid #253b52;border-radius:14px;padding:15px 18px}.stat strong{display:block;font-size:clamp(24px,3vw,34px);font-variant-numeric:tabular-nums}.stat span{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#9bb0c6;font-weight:700}.board{border:1px solid #2b4058;border-radius:18px;overflow:hidden;background:#0b1725;box-shadow:0 18px 55px #0005}.board-head,.departure{display:grid;grid-template-columns:105px minmax(180px,1.6fr) minmax(100px,.8fr) minmax(130px,1fr) minmax(130px,1fr);gap:16px;align-items:center;padding:16px 22px}.board-head{background:#14263a;color:#a9bfd5;font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:800}.departure{min-height:90px;border-top:1px solid #1c3045}.time{font-size:clamp(22px,2.5vw,31px);font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}.destination{font-size:clamp(17px,2vw,23px);font-weight:750}.sub{display:block;color:#8fa6bd;font-size:12px;margin-top:5px;font-weight:500}.quay{font-size:17px;font-weight:750}.status{font-size:14px;font-weight:700}.delay{color:#ffbd69}.ontime{color:#7fe0b1}.muted{color:#91a6bc}.pill{display:inline-flex;align-items:center;gap:7px;border-radius:99px;padding:7px 10px;background:#1c3348;color:#b8cee2;font-size:12px;font-weight:750}.dot{width:7px;height:7px;border-radius:50%;background:#70d9a5}.dot.warn{background:#ffbd69}.empty{padding:55px 25px;text-align:center;color:#9bb0c6}.empty strong{display:block;color:#f4f7fb;font-size:22px;margin-bottom:8px}footer{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;color:#7f95ab;font-size:12px;margin-top:18px}.controls{display:flex;align-items:center;gap:10px;margin-top:18px;flex-wrap:wrap}button,.file-label{border:1px solid #3a5672;border-radius:10px;background:#142a40;color:#eaf3fc;padding:10px 14px;font:inherit;font-size:13px;font-weight:700;cursor:pointer}button:hover,.file-label:hover{background:#1d3a56}input[type=file]{display:none}#message{color:#9bb0c6;font-size:13px}.error{color:#ff9b9b}@media(max-width:760px){.shell{padding:16px}.board-head{display:none}.departure{grid-template-columns:78px minmax(0,1fr) auto;gap:9px;padding:15px}.departure .platform{grid-column:2}.departure .vehicle{grid-column:3;grid-row:1/3;text-align:right}.time{font-size:22px}.destination{font-size:17px}.quay{font-size:14px}.status{font-size:12px}.stats{gap:8px}.stat{padding:12px}.stat span{font-size:9px}.header-right{font-size:12px}}
-</style></head><body><main class="shell">
-<header><div><div class="eyebrow">Norway · Real-time passenger information</div><h1 id="stop-name">Transit departures</h1></div><div class="header-right"><div class="clock" id="clock">--:--:--</div><div id="date-label">Waiting for data</div></div></header>
-<section class="stats"><div class="stat"><strong id="departure-count">—</strong><span>Departures shown</span></div><div class="stat"><strong id="vehicle-count">—</strong><span>Tracked vehicles</span></div><div class="stat"><strong id="matched-count">—</strong><span>Matched journeys</span></div></section>
-<section class="board"><div class="board-head"><div>Time</div><div>Destination</div><div>Platform</div><div>Real-time</div><div>Vehicle</div></div><div id="rows"><div class="empty"><strong>Load a data snapshot</strong>Choose the <code>display.json</code> file from a GitHub Actions artifact.</div></div></section>
-<div class="controls"><label class="file-label" for="file">Load display.json</label><input id="file" type="file" accept=".json,application/json"><button id="demo" type="button">Show demo layout</button><span id="message">Data stays in this browser tab; nothing is uploaded.</span></div>
-<footer><span>Data: Entur Journey Planner + Vehicle Positions</span><span id="updated">No snapshot loaded</span></footer></main>
-<script>
-const $=id=>document.getElementById(id);
-const fmtTime=value=>{if(!value)return "—";const d=new Date(value);return Number.isNaN(d.getTime())?"—":new Intl.DateTimeFormat(undefined,{hour:"2-digit",minute:"2-digit"}).format(d)};
-const esc=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-function render(data){
- const departures=Array.isArray(data.departures)?data.departures:[],vehicles=Array.isArray(data.vehicles)?data.vehicles:[];
- $("stop-name").textContent=data.stop_place?.name||"Transit departures";$("departure-count").textContent=departures.length;$("vehicle-count").textContent=vehicles.length;$("matched-count").textContent=data.matched_vehicle_count??departures.filter(x=>(x.matched_vehicles||[]).length).length;
- if(!departures.length){$("rows").innerHTML='<div class="empty"><strong>No departure calls in this snapshot</strong>The vehicle feed may still contain tracked vehicles.</div>';}
- else{$("rows").innerHTML=[...departures].sort((a,b)=>new Date(a.expected_departure_time||a.aimed_departure_time||0)-new Date(b.expected_departure_time||b.aimed_departure_time||0)).map(call=>{
- const when=call.expected_departure_time||call.aimed_departure_time||call.actual_departure_time,matches=call.matched_vehicles||[],vehicle=matches[0],delay=vehicle?.delay_seconds;
- const delayText=delay==null?"Real-time time":delay>30?"Delayed +"+Math.round(delay/60)+" min":delay< -30?"Early "+Math.round(Math.abs(delay)/60)+" min":"On time",statusClass=delay==null?"muted":delay>30?"delay":"ontime",freshness=vehicle?.freshness,vehicleText=vehicle?(vehicle.vehicle_id||vehicle.mode||"Tracked"):"Not matched",dotClass=freshness==="fresh"?"dot":"dot warn",quay=call.quay?.name||call.quay?.id||"—",dest=call.destination||"Destination unavailable";
- return '<article class="departure"><div class="time">'+esc(fmtTime(when))+'<span class="sub">'+(call.realtime===false?"Scheduled":"Expected")+'</span></div><div class="destination">'+esc(dest)+'<span class="sub">'+esc(call.mode||"")+'</span></div><div class="platform quay">'+esc(quay)+'</div><div class="status '+statusClass+'">'+esc(delayText)+'<span class="sub">'+(vehicle?"Position "+esc(freshness||"unknown"):"No position match")+'</span></div><div class="vehicle"><span class="pill"><i class="'+dotClass+'"></i>'+esc(vehicleText)+'</span><span class="sub">'+(vehicle?.position_age_seconds!=null?vehicle.position_age_seconds+"s ago":"")+'</span></div></article>';
- }).join("");}
- $("updated").textContent=data.generated_at?"Snapshot generated "+new Date(data.generated_at).toLocaleString():"Snapshot loaded";$("date-label").textContent=data.stop_place?.id||"Snapshot loaded";$("message").textContent="Loaded "+departures.length+" departures and "+vehicles.length+" vehicles.";$("message").className="";
-}
-$("file").addEventListener("change",async e=>{const file=e.target.files?.[0];if(!file)return;try{render(JSON.parse(await file.text()));}catch(err){$("message").textContent="Could not read JSON: "+err.message;$("message").className="error";}});
-$("demo").addEventListener("click",()=>render({stop_place:{name:"Bjørvika",id:"NSR:StopPlace:3983"},generated_at:new Date().toISOString(),matched_vehicle_count:2,vehicles:[{vehicle_id:"VY-001"},{vehicle_id:"VY-002"}],departures:[
-{expected_departure_time:new Date(Date.now()+4*60000).toISOString(),destination:"Oslo S",quay:{name:"A"},realtime:true,matched_vehicles:[{vehicle_id:"VY-001",freshness:"fresh",position_age_seconds:18,delay_seconds:0}]},
-{expected_departure_time:new Date(Date.now()+9*60000).toISOString(),destination:"Drammen",quay:{name:"B"},realtime:true,matched_vehicles:[{vehicle_id:"VY-002",freshness:"fresh",position_age_seconds:42,delay_seconds:150}]},
-{expected_departure_time:new Date(Date.now()+15*60000).toISOString(),destination:"Lillestrøm",quay:{name:"C"},realtime:false,matched_vehicles:[]}
-]}));
-function tick(){$("clock").textContent=new Intl.DateTimeFormat(undefined,{hour:"2-digit",minute:"2-digit",second:"2-digit"}).format(new Date());}tick();setInterval(tick,1000);
-</script></body></html>
+:root{font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;color:#f4f7fb;background:#07111e;font-synthesis:none}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 15% 0%,#142a42 0,transparent 45%),#07111e}
+.shell{max-width:1500px;margin:auto;padding:clamp(16px,3vw,42px)}
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;border-bottom:1px solid #26384c;padding-bottom:22px}
+.eyebrow{font-size:12px;letter-spacing:.19em;text-transform:uppercase;color:#8fa8c1;font-weight:750}
+h1{font-size:clamp(32px,5vw,60px);line-height:1;margin:10px 0 0;letter-spacing:-.045em}
+.header-right{text-align:right;color:#9db0c5;font-size:14px}.clock{font-variant-numeric:tabular-nums;font-size:clamp(24px,3vw,38px);font-weight:750;color:#fff}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:22px 0}
+.stat{background:#101f30;border:1px solid #253b52;border-radius:14px;padding:15px 18px}.stat strong{display:block;font-size:clamp(24px,3vw,34px);font-variant-numeric:tabular-nums}.stat span{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#9bb0c6;font-weight:700}
+.panel{background:#0d1b2b;border:1px solid #263d55;border-radius:16px;padding:16px;margin:16px 0}
+.panel h2{font-size:14px;text-transform:uppercase;letter-spacing:.12em;color:#b7cbe0;margin:0 0 13px}
+.controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+input[type=text],input[type=number]{background:#071522;color:#eef6ff;border:1px solid #38516b;border-radius:9px;padding:10px 12px;font:inherit;min-width:0}
+#stop-id{flex:1;min-width:260px}#departure-limit{width:82px}
+button,.file-label{border:1px solid #3a5672;border-radius:10px;background:#142a40;color:#eaf3fc;padding:10px 14px;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
+button:hover,.file-label:hover{background:#1d3a56}
+input[type=file]{display:none}.check{display:flex;align-items:center;gap:7px;color:#a9bfd5;font-size:13px}
+.providers{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+.provider{background:#101f30;border:1px solid #2b4058;border-radius:12px;padding:13px 15px;min-width:0}
+.provider h3{font-size:14px;margin:0 0 9px}.status-line{display:flex;align-items:flex-start;gap:9px;font-size:13px;font-weight:750}
+.status-line:before{content:"";width:9px;height:9px;border-radius:50%;background:#8294a8;flex:none;margin-top:4px}
+.status-line.ok:before{background:#70d9a5}.status-line.bad:before{background:#ff8585}.status-line.working:before{background:#ffc36e}
+.status-detail{display:block;color:#91a8bf;font-size:12px;font-weight:500;margin-top:4px;overflow-wrap:anywhere}
+.board{border:1px solid #2b4058;border-radius:18px;overflow:hidden;background:#0b1725;box-shadow:0 18px 55px #0005}
+.board-head,.departure{display:grid;grid-template-columns:105px minmax(180px,1.6fr) minmax(100px,.8fr) minmax(130px,1fr) minmax(130px,1fr);gap:16px;align-items:center;padding:16px 22px}
+.board-head{background:#14263a;color:#a9bfd5;font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:800}
+.departure{min-height:88px;border-top:1px solid #1c3045}.time{font-size:clamp(22px,2.5vw,31px);font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+.destination{font-size:clamp(17px,2vw,23px);font-weight:750}.sub{display:block;color:#8fa6bd;font-size:12px;margin-top:5px;font-weight:500}
+.quay{font-size:17px;font-weight:750}.status{font-size:14px;font-weight:700}.delay{color:#ffbd69}.ontime{color:#7fe0b1}.muted{color:#91a6bc}
+.pill{display:inline-flex;align-items:center;gap:7px;border-radius:99px;padding:7px 10px;background:#1c3348;color:#b8cee2;font-size:12px;font-weight:750;max-width:100%;overflow-wrap:anywhere}
+.dot{width:7px;height:7px;border-radius:50%;background:#70d9a5;flex:none}.dot.warn{background:#ffbd69}
+.empty{padding:55px 25px;text-align:center;color:#9bb0c6}.empty strong{display:block;color:#f4f7fb;font-size:22px;margin-bottom:8px}
+#ruter-details{white-space:pre-wrap;color:#9bb0c6;font-size:12px;margin-top:10px;overflow-wrap:anywhere}
+.log{max-height:145px;overflow:auto;font:12px/1.55 ui-monospace,monospace;color:#91a8bf}
+.log-entry{padding:2px 0}.log-entry.error{color:#ff9999}.log-entry.success{color:#85dfb4}
+footer{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;color:#7f95ab;font-size:12px;margin-top:18px}
+@media(max-width:760px){.shell{padding:14px}.board-head{display:none}.departure{grid-template-columns:76px minmax(0,1fr) auto;gap:9px;padding:14px}.departure .platform{grid-column:2}.departure .vehicle{grid-column:3;grid-row:1/3;text-align:right}.time{font-size:21px}.destination{font-size:16px}.quay{font-size:14px}.status{font-size:12px}.stats{gap:8px}.stat{padding:12px}.stat span{font-size:9px}.providers{grid-template-columns:1fr}.header-right{font-size:12px}}
+</style>
+</head>
+<body>
+<main class="shell">
+<header>
+  <div><div class="eyebrow">Norway · Real-time passenger information</div><h1 id="stop-name">Transit departures</h1></div>
+  <div class="header-right"><div class="clock" id="clock">--:--:--</div><div id="date-label">Connecting to data sources</div></div>
+</header>
+<section class="stats">
+  <div class="stat"><strong id="departure-count">—</strong><span>Departures shown</span></div>
+  <div class="stat"><strong id="vehicle-count">—</strong><span>Tracked vehicles</span></div>
+  <div class="stat"><strong id="matched-count">—</strong><span>Matched journeys</span></div>
+</section>
+<section class="panel">
+  <h2>Live data configuration</h2>
+  <div class="controls">
+    <input id="stop-id" type="text" aria-label="Entur stop place ID" placeholder="Entur stop-place ID">
+    <label>Calls <input id="departure-limit" type="number" min="1" max="50" value="20"></label>
+    <button id="refresh" type="button">Refresh Entur</button>
+    <label class="check"><input id="auto-refresh" type="checkbox" checked> Auto-refresh · 30 sec</label>
+    <label class="file-label" for="file">Load snapshot JSON</label><input id="file" type="file" accept=".json,application/json">
+  </div>
+  <div class="providers">
+    <div class="provider"><h3>Entur · Public APIs</h3><div id="entur-status" class="status-line working"><div><span class="status-label">Connecting</span><span class="status-detail">Journey Planner + VYG/VYX vehicle positions</span></div></div></div>
+    <div class="provider"><h3>Ruter · App GraphQL API</h3><div id="ruter-status" class="status-line"><div><span class="status-label">Not tested</span><span class="status-detail">Anonymous token + GraphQL WebSocket schema probe</span></div></div><div id="ruter-details">Ruter probe is manual. No account credentials are used; the anonymous token is kept in memory and never displayed.</div><div style="margin-top:10px"><button id="ruter-probe" type="button">Test Ruter connection</button></div></div>
+  </div>
+</section>
+<section class="board">
+  <div class="board-head"><div>Time</div><div>Destination</div><div>Platform</div><div>Real-time</div><div>Vehicle</div></div>
+  <div id="rows"><div class="empty"><strong>Connecting to Entur</strong>Departure data will appear here when the first request succeeds.</div></div>
+</section>
+<section class="panel"><h2>Diagnostics</h2><div id="log" class="log"></div></section>
+<footer><span>Entur data: Journey Planner + Vehicle Positions · Ruter: experimental app backend</span><span id="updated">Waiting for first update</span></footer>
+</main>
+<script src="./live.js"></script>
+</body>
+</html>
