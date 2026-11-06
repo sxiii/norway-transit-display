@@ -109,7 +109,26 @@ The observed `vehicleProgress` subscription takes a service-journey identifier a
 
 **Verified from the browser probe:** the anonymous-token mutation succeeds and the authenticated GraphQL WebSocket responds. Cosmo Router explicitly disables schema introspection (`__schema` / `__type`), so introspection errors must not be interpreted as network or CORS failures. The browser probe now uses the harmless `__typename` meta-field to verify the authenticated WebSocket path.
 
-**Not yet verified:** the live `departuresByLine` and `vehicleProgress` subscription payloads, returned data, and whether the service is intended for third-party use. The exact operation argument/input shapes still need to be validated from app traffic or APK-generated client metadata; do not guess them.
+**APK operation documents recovered from the earlier inspection:**
+
+```graphql
+subscription departuresByLine($id: ID!) {
+  departuresByLine(id: $id) {
+    id
+    estimatedCalls { serviceJourneyId operatingDate }
+  }
+}
+
+subscription vehicleProgress($id: String!, $date: String!) {
+  vehicleProgress(serviceJourneyId: $id, operatingDate: $date) {
+    id latitude longitude status quayId atQuay serviceJourneyId stopPositionInJourney
+  }
+}
+```
+
+The browser adapter now derives distinct line IDs from Entur departure records whose line ID begins with `RUT:Line:`, subscribes to `departuresByLine`, then subscribes to `vehicleProgress` for each returned service-journey/date pair. Vehicle progress is joined to the display by service journey ID.
+
+**Still to validate against live Ruter responses:** whether the line IDs supplied by Entur are accepted unchanged by Ruter's app GraphQL resolver, the actual shape/cardinality of subscription payloads, and whether position events arrive for the selected journeys. These are now runtime checks rather than guessed schema details.
 
 The Ruter app's backend appears separate from the public Entur endpoint. Entur's published coverage table does not list RUT vehicle positions, although Ruter's own app may have a separate vehicle-progress facility.
 
