@@ -371,7 +371,9 @@ async function probeRuter() {
 function initVehicleMap() {
  if(state.map||!window.L)return;
  state.map=L.map("vehicle-map",{zoomControl:true,attributionControl:true}).setView([59.9139,10.7522],13);
- L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{subdomains:"abcd",maxZoom:20,attribution:"© OpenStreetMap contributors © CARTO"}).addTo(state.map);
+ const attribution="Tiles © Esri, HERE, Garmin, © OpenStreetMap contributors, and the GIS user community";
+ L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",{maxZoom:16,attribution}).addTo(state.map);
+ L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}",{maxZoom:16,attribution}).addTo(state.map);
 }
 function updateVehicleMap(progress) {
  const lat=Number(progress.latitude),lon=Number(progress.longitude);
