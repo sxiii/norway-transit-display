@@ -155,8 +155,6 @@ Recommended stages:
 
 - Use documented public APIs and a meaningful `ET-Client-Name`.
 - Respect provider terms, rate limits and attribution requirements.
-- Never commit access tokens, cookies, private account data or raw APKs.
-- Treat APK string extraction as reverse-engineering evidence, not authorization to access private services.
 - The included Ruter probe only requests an anonymous token and a harmless GraphQL `__typename` probe. It does not access personal accounts or attempt to bypass authorization.
 - Before deploying a public display, confirm data licensing, permitted caching, attribution and operational restrictions.
 
