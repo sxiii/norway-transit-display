@@ -39,7 +39,7 @@ function gql(endpoint, query, headers = {}, signal) {
     return body.data;
   });
 }
-const enturHeaders = { "ET-Client-Name": CONFIG.enturClient };
+const enturHeaders = { "ET-Client-Name": CONFIG.enturClient };\n// Ruter rejects anonymous GraphQL requests without this app-platform header.\nconst ruterHeaders = { "client-platform": "android" };
 
 function vehicleQuery(code) {
   return `query { vehicles(codespaceId: "${code}") {
@@ -169,7 +169,7 @@ function ruterWebSocketProbe(token) {
     timer = setTimeout(() => finish(new Error(acknowledged ? "WebSocket opened but schema probe timed out" : "WebSocket connection acknowledgement timed out")), 12000);
     ws.onerror = () => finish(new Error("WebSocket network error (browser console may contain CORS/network details)"));
     ws.onclose = event => { if (!settled) finish(new Error("WebSocket closed before probe completed (code " + event.code + ")")); };
-    ws.onopen = () => ws.send(JSON.stringify({ type:"connection_init", payload:{ Authorization:"Bearer " + token, authorization:"Bearer " + token } }));
+    ws.onopen = () => ws.send(JSON.stringify({ type:"connection_init", payload:{ Authorization:"Bearer " + token, authorization:"Bearer " + token, "client-platform":"android", clientPlatform:"android" } }));
     ws.onmessage = event => {
       let msg;
       try { msg = JSON.parse(event.data); } catch { return; }
@@ -190,7 +190,7 @@ async function probeRuter() {
   setStatus("ruter-status", "Requesting anonymous token", "working", "No account login is used");
   $("ruter-details").textContent = "Requesting token…";
   try {
-    const tokenData = await gql(CONFIG.ruterUrl, "mutation { getAnonymousCustomerToken_v2 { accessToken } }");
+    const tokenData = await gql(CONFIG.ruterUrl, "mutation { getAnonymousCustomerToken_v2 { accessToken } }", ruterHeaders);
     const token = tokenData.getAnonymousCustomerToken_v2?.accessToken;
     if (!token) throw new Error("Token mutation returned no accessToken");
     setStatus("ruter-status", "Token acquired", "working", "Testing GraphQL WebSocket");
