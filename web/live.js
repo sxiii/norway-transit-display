@@ -4,7 +4,7 @@ const CONFIG = {
   vehiclesUrl: "https://api.entur.io/realtime/v2/vehicles/graphql",
   journeyUrl: "https://api.entur.io/journey-planner/v3/graphql",
   ruterUrl: "https://cosmo-router.transhub.io/graphql",
-  defaultStop: "NSR:StopPlace:3983",
+  defaultStop: "NSR:StopPlace:4000",
   refreshMs: 30000,
   ruterClientVersion: "7.105.1"
 };
