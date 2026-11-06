@@ -163,7 +163,7 @@ function ruterWebSocketProbe(token) {
       try { ws.close(1000, "Probe complete"); } catch {}
       error ? reject(error) : resolve(result);
     };
-    timer = setTimeout(() => finish(new Error(acknowledged ? "WebSocket opened but schema probe timed out" : "WebSocket connection acknowledgement timed out")), 12000);
+    timer = setTimeout(() => finish(new Error(acknowledged ? "WebSocket opened but GraphQL probe timed out" : "WebSocket connection acknowledgement timed out")), 12000);
     ws.onerror = () => finish(new Error("WebSocket network error (browser console may contain CORS/network details)"));
     ws.onclose = event => { if (!settled) finish(new Error("WebSocket closed before probe completed (code " + event.code + ")")); };
     ws.onopen = () => ws.send(JSON.stringify({ type:"connection_init", payload:{ Authorization:"Bearer " + token, authorization:"Bearer " + token, "client-platform":"android", "client-version":CONFIG.ruterClientVersion, clientPlatform:"android", clientVersion:CONFIG.ruterClientVersion } }));
@@ -172,8 +172,8 @@ function ruterWebSocketProbe(token) {
       try { msg = JSON.parse(event.data); } catch { return; }
       if (msg.type === "connection_ack") {
         acknowledged = true;
-        ws.send(JSON.stringify({ id:"schema-probe", type:"subscribe", payload:{ operationName:"RuterSubscriptionIntrospection", query:ruterConnectionProbeQuery() } }));
-      } else if (msg.type === "next" && msg.id === "schema-probe") {
+        ws.send(JSON.stringify({ id:"connection-probe", type:"subscribe", payload:{ operationName:"RuterConnectionProbe", query:ruterConnectionProbeQuery() } }));
+      } else if (msg.type === "next" && msg.id === "connection-probe") {
         const typename = msg.payload?.data?.__typename;
         if (!typename) {
           const errors = msg.payload?.errors;
@@ -211,11 +211,6 @@ async function probeRuter() {
     log("Ruter probe failed: " + error.message, "error");
   }
 }
-function typeName(type) {
-  if (!type) return "?";
-  return type.name || (type.ofType ? typeName(type.ofType) : type.kind);
-}
-
 $("refresh").addEventListener("click", refreshEntur);
 $("ruter-probe").addEventListener("click", probeRuter);
 $("auto-refresh").addEventListener("change", () => {
