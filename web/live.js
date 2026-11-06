@@ -10,7 +10,7 @@ const CONFIG = {
 };
 
 const $ = (id) => document.getElementById(id);
-const state = { timer: null, busy: false, departures: [], vehicles: [], lastUpdated: null, stopName: null, ruterSocket: null, ruterProgress: new Map(), ruterLineSubscriptions: new Set(), ruterJourneySubscriptions: new Set() };
+const state = { map: null, mapMarker: null, selectedMapJourney: null, searchTimer: null, searchAbort: null, timer: null, busy: false, departures: [], vehicles: [], lastUpdated: null, stopName: null, ruterSocket: null, ruterProgress: new Map(), ruterLineSubscriptions: new Set(), ruterJourneySubscriptions: new Set() };
 
 function setStatus(id, label, kind = "neutral", detail = "") {
   const node = $(id);
@@ -117,9 +117,10 @@ function renderBoard() {
       <div class="destination">${route ? `<span class="route-badge">${esc(route)}</span>` : ""}${esc(destination)}<span class="sub">${vehicle ? esc(vehicle.mode || vehicle.codespace) : " "}</span></div>
       <div class="platform quay">${esc(quay)}</div>
       <div class="status ${delayClass}">${esc(delayText)}<span class="sub">${vehicle ? "Vehicle position available" : "No position match"}</span></div>
-      <div class="vehicle"><span class="pill"><i class="dot ${vehicle ? "" : "warn"}"></i>${esc(vehicleLabel)}</span><span class="sub">${esc(coords)}</span></div>
+      <div class="vehicle"><span class="pill"><i class="dot ${vehicle ? "" : "warn"}"></i>${esc(vehicleLabel)}</span><span class="sub">${esc(coords)}</span>${vehicle?.source === "Ruter" && vehicle.location?.latitude != null ? `<button type="button" data-map-journey="${esc(journeyId)}">Show map</button>` : ""}</div>
     </article>`;
   }).join("");
+  $("rows").querySelectorAll("[data-map-journey]").forEach(button => button.addEventListener("click", () => showVehicleMap(button.dataset.mapJourney)));
   $("stop-name").textContent = state.stopName || $("stop-id").value.trim();
   $("date-label").textContent = "Live data · " + new Date().toLocaleDateString();
   $("updated").textContent = "Last successful refresh: " + new Date(state.lastUpdated).toLocaleTimeString();
@@ -333,6 +334,7 @@ async function probeRuter() {
           const journeyId = progress.serviceJourneyId || operation.variables.id;
           state.ruterProgress.set(journeyId, progress);
           renderBoard();
+          if (state.selectedMapJourney === journeyId) updateVehicleMap(progress);
           const vehicleRef = progress.vehicleRef || progress.vehicleId || progress.vehicle?.id || null;
           log("Ruter vehicleProgress for "+journeyId+
             (vehicleRef ? " · vehicle "+vehicleRef : " · physical vehicle ID not present in selected fields")+
@@ -365,6 +367,60 @@ async function probeRuter() {
     log("Ruter probe failed: "+error.message, "error");
   }
 }
+
+function initVehicleMap() {
+ if(state.map||!window.L)return;
+ state.map=L.map("vehicle-map",{zoomControl:true,attributionControl:true}).setView([59.9139,10.7522],13);
+ L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap contributors"}).addTo(state.map);
+}
+function updateVehicleMap(progress) {
+ const lat=Number(progress.latitude),lon=Number(progress.longitude);
+ if(!Number.isFinite(lat)||!Number.isFinite(lon))return;
+ initVehicleMap();if(!state.map)return;
+ const point=[lat,lon];
+ if(!state.mapMarker)state.mapMarker=L.circleMarker(point,{radius:9,color:"#fff2f7",weight:3,fillColor:"#f18abb",fillOpacity:1}).addTo(state.map);
+ else state.mapMarker.setLatLng(point);
+ state.mapMarker.bindPopup("<b>"+esc(progress.id||"Ruter bus")+"</b><br>"+lat.toFixed(5)+", "+lon.toFixed(5));
+ state.map.panTo(point,{animate:false});
+ $("map-subtitle").textContent=(progress.id||"Ruter bus")+" · "+lat.toFixed(5)+", "+lon.toFixed(5)+" · "+(progress.status||"Live");
+ setTimeout(()=>state.map?.invalidateSize(),0);
+}
+function showVehicleMap(journeyId){
+ const p=state.ruterProgress.get(journeyId);if(!p)return;
+ state.selectedMapJourney=journeyId;$("map-panel").hidden=false;
+ $("map-title").textContent="Live bus · "+(p.id||"Ruter");
+ updateVehicleMap(p);setTimeout(()=>state.map?.invalidateSize(),50);
+ $("map-panel").scrollIntoView({behavior:"smooth",block:"nearest"});
+}
+async function searchStops(query){
+ const box=$("stop-suggestions");if(state.searchAbort)state.searchAbort.abort();
+ const controller=new AbortController();state.searchAbort=controller;
+ try{
+  const response=await fetch("https://api.entur.io/geocoder/v3/autocomplete?q="+encodeURIComponent(query)+"&lang=en",{headers:{"ET-Client-Name":CONFIG.enturClient,"Accept":"application/json"},signal:controller.signal});
+  if(!response.ok)throw new Error("Geocoder HTTP "+response.status);
+  const data=await response.json();
+  const stops=(data.features||[]).map(f=>{const p=f.properties||{};return{id:p.id||p.gid||p.identifier,name:p.name||p.label||"Unnamed stop",area:p.locality||p.localadmin||p.county||""};}).filter(x=>x.id&&String(x.id).includes("StopPlace"));
+  box.replaceChildren();
+  if(!stops.length){box.hidden=false;box.textContent="No matching stops found";return;}
+  stops.slice(0,8).forEach(stop=>{
+   const b=document.createElement("button");b.type="button";b.className="suggestion";
+   b.innerHTML=esc(stop.name)+"<small>"+esc([stop.area,stop.id].filter(Boolean).join(" · "))+"</small>";
+   b.addEventListener("click",()=>{$("stop-id").value=stop.id;$("stop-search").value=stop.name;box.hidden=true;state.ruterProgress.clear();state.selectedMapJourney=null;$("map-panel").hidden=true;refreshEntur();if(state.ruterSocket)probeRuter();});
+   box.append(b);
+  });box.hidden=false;
+ }catch(e){if(e.name!=="AbortError")log("Stop search failed: "+e.message,"error");}
+}
+function setupStopSearch(){
+ $("stop-search").value="Jernbanetorget";
+ $("stop-search").addEventListener("input",()=>{const q=$("stop-search").value.trim();clearTimeout(state.searchTimer);if(q.length<2){$("stop-suggestions").hidden=true;return;}state.searchTimer=setTimeout(()=>searchStops(q),180);});
+ document.addEventListener("click",e=>{if(!e.target.closest(".stop-search-wrap"))$("stop-suggestions").hidden=true;});
+}
+$("map-center").addEventListener("click",()=>{const p=state.selectedMapJourney&&state.ruterProgress.get(state.selectedMapJourney);if(p)updateVehicleMap(p);});
+$("map-close").addEventListener("click",()=>{$("map-panel").hidden=true;});
+$("map-fullscreen").addEventListener("click",async()=>{try{if(!document.fullscreenElement)await $("map-panel").requestFullscreen();else await document.exitFullscreen();}catch(e){log("Fullscreen unavailable: "+e.message,"error");}});
+document.addEventListener("fullscreenchange",()=>{$("map-fullscreen").textContent=document.fullscreenElement?"Exit fullscreen":"Fullscreen";setTimeout(()=>state.map?.invalidateSize(),80);});
+
+setupStopSearch();
 $("refresh").addEventListener("click", refreshEntur);
 $("ruter-probe").addEventListener("click", probeRuter);
 $("auto-refresh").addEventListener("change", () => {
