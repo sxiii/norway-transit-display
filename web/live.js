@@ -371,7 +371,7 @@ async function probeRuter() {
 function initVehicleMap() {
  if(state.map||!window.L)return;
  state.map=L.map("vehicle-map",{zoomControl:true,attributionControl:true}).setView([59.9139,10.7522],13);
- L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19,attribution:"© OpenStreetMap contributors"}).addTo(state.map);
+ L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",{subdomains:"abcd",maxZoom:20,attribution:"© OpenStreetMap contributors © CARTO"}).addTo(state.map);
 }
 function updateVehicleMap(progress) {
  const lat=Number(progress.latitude),lon=Number(progress.longitude);
