@@ -158,17 +158,17 @@ async function refreshEntur() {
   }
 }
 
-const RUTER_DEPARTURES_SUBSCRIPTION = \`subscription departuresByLine($id: ID!) {
+const RUTER_DEPARTURES_SUBSCRIPTION = `subscription departuresByLine($id: ID!) {
   departuresByLine(id: $id) {
     id
     estimatedCalls { serviceJourneyId operatingDate }
   }
-}\`;
-const RUTER_PROGRESS_SUBSCRIPTION = \`subscription vehicleProgress($id: String!, $date: String!) {
+}`;
+const RUTER_PROGRESS_SUBSCRIPTION = `subscription vehicleProgress($id: String!, $date: String!) {
   vehicleProgress(serviceJourneyId: $id, operatingDate: $date) {
     id latitude longitude status quayId atQuay serviceJourneyId stopPositionInJourney
   }
-}\`;
+}`;
 function closeRuterSocket() {
   if (state.ruterSocket) { try { state.ruterSocket.close(1000, "Ruter reconnect"); } catch {} state.ruterSocket = null; }
   state.ruterProgress.clear(); state.ruterLineSubscriptions.clear(); state.ruterJourneySubscriptions.clear();
