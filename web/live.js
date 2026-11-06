@@ -5,7 +5,8 @@ const CONFIG = {
   journeyUrl: "https://api.entur.io/journey-planner/v3/graphql",
   ruterUrl: "https://cosmo-router.transhub.io/graphql",
   defaultStop: "NSR:StopPlace:3983",
-  refreshMs: 30000
+  refreshMs: 30000,
+  ruterClientVersion: "7.105.1"
 };
 
 const $ = (id) => document.getElementById(id);
@@ -41,7 +42,7 @@ function gql(endpoint, query, headers = {}, signal) {
 }
 const enturHeaders = { "ET-Client-Name": CONFIG.enturClient };
 // Ruter rejects anonymous GraphQL requests without this app-platform header.
-const ruterHeaders = { "client-platform": "android" };
+const ruterHeaders = { "client-platform": "android", "client-version": CONFIG.ruterClientVersion };
 
 function vehicleQuery(code) {
   return `query { vehicles(codespaceId: "${code}") {
@@ -58,7 +59,7 @@ function departureQuery(stopId, count) {
       realtime aimedDepartureTime expectedDepartureTime actualDepartureTime
       destinationDisplay { frontText }
       quay { id name }
-      serviceJourney { id }
+      serviceJourney { id journeyPattern { line { publicCode name } } }
     }
   } }`;
 }
@@ -97,12 +98,13 @@ function renderBoard() {
       delayClass = seconds > 30 ? "delay" : "ontime";
     }
     const destination = call.destinationDisplay?.frontText || "Destination unavailable";
+    const route = call.serviceJourney?.journeyPattern?.line?.publicCode || call.serviceJourney?.journeyPattern?.line?.name || "";
     const quay = call.quay?.name || call.quay?.id || "—";
     const vehicleLabel = vehicle?.vehicleId || (vehicle ? "Tracked" : "Not matched");
     const coords = vehicle?.location?.latitude != null ? vehicle.location.latitude.toFixed(4) + ", " + vehicle.location.longitude.toFixed(4) : "";
     return `<article class="departure">
       <div class="time">${esc(time)}<span class="sub">${call.realtime ? "Expected" : "Scheduled"}</span></div>
-      <div class="destination">${esc(destination)}<span class="sub">${vehicle ? esc(vehicle.mode || vehicle.codespace) : " "}</span></div>
+      <div class="destination">${route ? `<span class="route-badge">${esc(route)}</span>` : ""}${esc(destination)}<span class="sub">${vehicle ? esc(vehicle.mode || vehicle.codespace) : " "}</span></div>
       <div class="platform quay">${esc(quay)}</div>
       <div class="status ${delayClass}">${esc(delayText)}<span class="sub">${vehicle ? "Vehicle position available" : "No position match"}</span></div>
       <div class="vehicle"><span class="pill"><i class="dot ${vehicle ? "" : "warn"}"></i>${esc(vehicleLabel)}</span><span class="sub">${esc(coords)}</span></div>
@@ -171,7 +173,7 @@ function ruterWebSocketProbe(token) {
     timer = setTimeout(() => finish(new Error(acknowledged ? "WebSocket opened but schema probe timed out" : "WebSocket connection acknowledgement timed out")), 12000);
     ws.onerror = () => finish(new Error("WebSocket network error (browser console may contain CORS/network details)"));
     ws.onclose = event => { if (!settled) finish(new Error("WebSocket closed before probe completed (code " + event.code + ")")); };
-    ws.onopen = () => ws.send(JSON.stringify({ type:"connection_init", payload:{ Authorization:"Bearer " + token, authorization:"Bearer " + token, "client-platform":"android", clientPlatform:"android" } }));
+    ws.onopen = () => ws.send(JSON.stringify({ type:"connection_init", payload:{ Authorization:"Bearer " + token, authorization:"Bearer " + token, "client-platform":"android", "client-version":CONFIG.ruterClientVersion, clientPlatform:"android", clientVersion:CONFIG.ruterClientVersion } }));
     ws.onmessage = event => {
       let msg;
       try { msg = JSON.parse(event.data); } catch { return; }
@@ -233,7 +235,7 @@ $("file").addEventListener("change", async event => {
       realtime:d.realtime, aimedDepartureTime:d.aimed_departure_time,
       expectedDepartureTime:d.expected_departure_time, actualDepartureTime:d.actual_departure_time,
       destinationDisplay:{frontText:d.destination}, quay:d.quay,
-      serviceJourney:{id:d.service_journey_id}
+      serviceJourney:{id:d.service_journey_id,journeyPattern:{line:{publicCode:d.line_public_code,name:d.line_name}}}
     }));
     state.vehicles = (data.vehicles || []).map(v => ({
       vehicleId:v.vehicle_id, mode:v.mode, delay:v.delay_seconds,
