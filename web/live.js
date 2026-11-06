@@ -324,31 +324,6 @@ async function probeRuter() {
     log("Ruter probe failed: " + error.message, "error");
   }
 }
-async function probeRuter() {
-  setStatus("ruter-status", "Requesting anonymous token", "working", "No account login is used");
-  $("ruter-details").textContent = "Requesting token…";
-  try {
-    const tokenData = await gql(CONFIG.ruterUrl, "mutation { getAnonymousCustomerToken_v2 { accessToken } }", ruterHeaders);
-    const token = tokenData.getAnonymousCustomerToken_v2?.accessToken;
-    if (!token) throw new Error("Token mutation returned no accessToken");
-    setStatus("ruter-status", "Token acquired", "working", "Testing GraphQL WebSocket");
-    log("Ruter anonymous token acquired (value deliberately not displayed or stored).", "success");
-    const schema = await ruterWebSocketProbe(token);
-    const details = [
-      "Anonymous token: acquired",
-      "Authenticated WebSocket: connected",
-      "GraphQL probe: __typename = " + schema.typename,
-      "Schema introspection is disabled by Ruter's Cosmo Router; real app operations must be tested directly."
-    ].join("\n");
-    $("ruter-details").textContent = details;
-    setStatus("ruter-status", "WebSocket + GraphQL OK", "ok", "Anonymous token and authenticated GraphQL request succeeded");
-    log("Ruter authenticated WebSocket and GraphQL probe succeeded (__typename: " + schema.typename + ").", "success");
-  } catch (error) {
-    $("ruter-details").textContent = error.message;
-    setStatus("ruter-status", "Probe failed", "bad", error.message);
-    log("Ruter probe failed: " + error.message, "error");
-  }
-}
 $("refresh").addEventListener("click", refreshEntur);
 $("ruter-probe").addEventListener("click", probeRuter);
 $("auto-refresh").addEventListener("change", () => {
