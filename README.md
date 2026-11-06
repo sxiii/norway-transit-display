@@ -4,7 +4,7 @@ Research and tooling for recreating real-time passenger-information displays usi
 
 **Current focus:** Entur vehicle positions for Vy rail and Vy buses, plus stop-level departures from Entur Journey Planner and a separately documented Ruter GraphQL investigation.
 
-This independent research project is not affiliated with Entur, Vy, Ruter, or their contractors. It contains no APKs, extracted proprietary source code, credentials, or access tokens.
+This independent research project is not affiliated with Entur, Vy, Ruter, or their contractors.
 
 ## Contents
 
