@@ -38,7 +38,7 @@ class NormalizerTests(unittest.TestCase):
                 "VYG": {
                     "vehicles": [{
                         "vehicleId": "train-1",
-                        "serviceJourney": {"id": "VYG:ServiceJourney:42"},
+                        "serviceJourney": {"id": "VYG:ServiceJourney:42", "journeyPattern": {"line": {"publicCode": "L1", "name": "Line 1"}}},
                         "lastUpdated": "2026-11-06T11:59:30+00:00",
                         "delay": 90,
                         "location": {"latitude": 59.9, "longitude": 10.8},
@@ -68,6 +68,8 @@ class NormalizerTests(unittest.TestCase):
         self.assertEqual(result["vehicles"][0]["freshness"], "fresh")
         self.assertEqual(len(result["vehicles"][0]["stop_departures"]), 1)
         self.assertEqual(result["departures"][0]["destination"], "Oslo S")
+        self.assertEqual(result["departures"][0]["line_public_code"], "L1")
+        self.assertEqual(result["departures"][0]["line_name"], "Line 1")
         self.assertEqual(result["departures"][0]["quay"]["name"], "1")
         self.assertEqual(result["departures"][0]["matched_vehicles"][0]["vehicle_id"], "train-1")
 
@@ -117,7 +119,9 @@ class JourneyPlannerTests(unittest.TestCase):
         query = module.build_query("NSR:StopPlace:123", 12)
         self.assertIn('stopPlace(id: "NSR:StopPlace:123")', query)
         self.assertIn("expectedDepartureTime", query)
-        self.assertIn("serviceJourney { id }", query)
+        self.assertIn("serviceJourney { id journeyPattern", query)
+        self.assertIn("publicCode", query)
+        self.assertIn("line { publicCode name }", query)
         self.assertIn("numberOfDepartures: 12", query)
 
     def test_stop_id_is_escaped_as_graphql_string(self):
