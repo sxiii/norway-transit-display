@@ -26,7 +26,9 @@ def post_graphql(query: str, token: str | None, timeout: int) -> dict[str, Any]:
     headers = {
         "Content-Type": "application/json",
         "Accept": "application/json",
-        "User-Agent": "norway-transit-display-research/0.1",\n        "client-platform": "android",
+        "User-Agent": "norway-transit-display-research/0.1",
+        "client-platform": "android",
+        "client-version": "7.105.1",
     }
     if token:
         headers["Authorization"] = f"Bearer {token}"
