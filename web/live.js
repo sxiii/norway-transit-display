@@ -39,7 +39,8 @@ function gql(endpoint, query, headers = {}, signal) {
     return body.data;
   });
 }
-const enturHeaders = { "ET-Client-Name": CONFIG.enturClient };\n// Ruter rejects anonymous GraphQL requests without this app-platform header.\nconst ruterHeaders = { "client-platform": "android" };
+const enturHeaders = { "ET-Client-Name": CONFIG.enturClient };
+// Ruter rejects anonymous GraphQL requests without this app-platform header.\nconst ruterHeaders = { "client-platform": "android" };
 
 function vehicleQuery(code) {
   return `query { vehicles(codespaceId: "${code}") {
