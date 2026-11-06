@@ -98,6 +98,7 @@ Static strings and operation names observed:
 - GraphQL HTTP endpoint: `https://cosmo-router.transhub.io/graphql`
 - GraphQL WebSocket endpoint: `wss://cosmo-router.transhub.io/graphql`
 - WebSocket subprotocol: `graphql-transport-ws`
+- Required request headers observed from the live endpoint: `client-platform: android` and `client-version: 7.105.1` (the latter is set to the inspected APK version `Ruter-7.105.1`; verify against newer app releases).
 - Feature flag: `vehicleProgressEnabled`
 - Anonymous-token mutation:
   `getAnonymousCustomerToken_v2 { accessToken }`
