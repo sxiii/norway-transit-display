@@ -13,11 +13,24 @@ This independent research project is not affiliated with Entur, Vy, Ruter, or th
 - `scripts/entur_departures.py`: upcoming departures at a supplied Entur stop-place ID, including service-journey IDs.
 - `scripts/normalize_display.py`: joins vehicle positions and stop departures by service-journey ID and emits a display-ready JSON model.
 - `web/index.html` + `web/live.js`: browser-native live display with Entur polling, route-number badges, and an experimental Ruter anonymous-token / GraphQL WebSocket probe.
-- `scripts/ruter_probe.py`: anonymous-token and harmless GraphQL connectivity probe.
-- `.github/workflows/collect-vehicle-data.yml`: scheduled and manually-triggered collection.
+- `.github/workflows/collect-vehicle-data.yml`: scheduled and manually-triggered data collection.
+- `.github/workflows/deploy-pages.yml`: publishes the browser display to GitHub Pages.
 - `tests/`: offline unit tests.
 
-## Quick start
+## Browser display (GitHub Pages)
+
+The display is a static website and can run directly from GitHub Pages; no local checkout, Python server, or downloaded project artifact is needed.
+
+1. In the repository, open **Settings → Pages**.
+2. Set **Source** to **GitHub Actions** (one-time setup).
+3. Open **Actions → Deploy transit display to GitHub Pages** and run it once, or push a change under `web/`.
+4. Open the Pages URL shown in the deployment summary. It will be:
+
+   https://sxiii.github.io/norway-transit-display/
+
+The page loads `web/index.html` and `web/live.js` together. Entur data is fetched directly by the browser; Ruter live probing remains a manual action. The optional **Load snapshot JSON** control still lets you load a locally saved snapshot, but it is no longer required for the live display.
+
+## Quick start (data collection tools)
 
 Python 3.11+; no third-party packages required.
 
@@ -29,15 +42,7 @@ python scripts/ruter_probe.py
 python -m unittest discover -s tests -v
 ```
 
-## Browser display
-
-1. Download and extract the latest `norway-transit-N` artifact from the [Actions runs](https://github.com/sxiii/norway-transit-display/actions).
-2. Open `web/index.html` in a modern browser.
-3. Choose the extracted `display.json` using **Load display.json**.
-
-The renderer runs locally in your browser. It does not upload the snapshot anywhere. **Show demo layout** previews the design without needing an artifact.
-
-## GitHub Actions
+## GitHub Actions data collection
 
 Open **Actions → Collect Norwegian vehicle positions → Run workflow**. The default departure stop is the central/night-bus stop (`NSR:StopPlace:4000`); you can override it when manually launching the workflow. Scheduled runs collect VYG/VYX vehicle positions and departures from this stop every 15 minutes.
 
@@ -50,7 +55,8 @@ The normalizer retains the complete stop departure board, including calls withou
 ## Limitations
 
 - A successful API response proves reachability, not that the endpoint is the same backend used by onboard passenger displays.
-- The renderer currently loads a downloaded JSON snapshot; it is not yet a continuously updating WebSocket client.
+- The browser display queries Entur directly and is subject to the APIs' availability and browser CORS policies.
+- The Ruter app-backend integration is experimental and may stop working if the app protocol changes.
 - A vehicle may not appear in the position feed or may not match a departure, even when the departure itself is valid.
 
 ## License
