@@ -80,8 +80,20 @@ function ruterVehicleFor(journeyId) {
   };
 }
 function renderBoard() {
-  const allCalls = state.selectedRouteFilter && state.ruterRouteDepartures.size
-    ? [...state.ruterRouteDepartures.values()].filter(call => state.ruterProgress.has(call.serviceJourney?.id))
+  const allCalls = state.selectedRouteFilter
+    ? (() => {
+        const routeCalls = new Map([...state.ruterRouteDepartures.entries()]
+          .filter(([journeyId]) => state.ruterProgress.has(journeyId)));
+        for (const [journeyId, progress] of state.ruterProgress) {
+          if (!routeCalls.has(journeyId)) routeCalls.set(journeyId, {
+            serviceJourney:{id:journeyId, journeyPattern:{line:{publicCode:state.ruterJourneyRoutes.get(journeyId) || state.selectedRouteFilter}}},
+            destinationDisplay:{frontText:"Live bus · route "+state.selectedRouteFilter},
+            quay:{id:progress.quayId || "", name:progress.quayId || "—"},
+            realtime:true
+          });
+        }
+        return [...routeCalls.values()];
+      })()
     : state.departures;
   const calls = state.selectedRouteFilter
     ? allCalls.filter(call => String(call.serviceJourney?.journeyPattern?.line?.publicCode || call.serviceJourney?.journeyPattern?.line?.name || "").trim().toLowerCase() === state.selectedRouteFilter.toLowerCase())
