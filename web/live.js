@@ -583,7 +583,7 @@ function busNumberIcon(route) {
  const style=transportModeStyle("",route);
  return L.divIcon({
   className:"bus-number-marker",
-  html:'<span class="bus-number-dot" style="background:'+style.color+'">'+style.icon+(number?" "+esc(number):"")+'</span>',
+  html:'<span class="bus-number-dot" style="background:'+style.color+'">'+(number?esc(number):"")+'</span>',
   iconSize:[30,30],
   iconAnchor:[15,15],
   popupAnchor:[0,-15]
@@ -614,7 +614,7 @@ function transportModeIcon(mode, route) {
  const style=transportModeStyle(mode,route),number=String(route||"").trim();
  return L.divIcon({
   className:"bus-number-marker",
-  html:'<span class="bus-number-dot" style="background:'+style.color+'">'+style.icon+(number?" "+esc(number):"")+'</span>',
+  html:'<span class="bus-number-dot" style="background:'+style.color+'">'+(number?esc(number):style.label[0])+'</span>',
   iconSize:[30,30],iconAnchor:[15,15],popupAnchor:[0,-15]
  });
 }
