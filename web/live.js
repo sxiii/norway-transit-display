@@ -50,6 +50,7 @@ function vehicleQuery(code) {
   return `query { vehicles(codespaceId: "${code}") {
     vehicleId originName destinationName mode lastUpdated delay
     location { latitude longitude }
+    line { lineRef lineName publicCode }
     serviceJourney { id }
   } }`;
 }
@@ -333,7 +334,7 @@ function connectEnturModeTracking() {
     const id="entur-mode-"+mode.toLowerCase();
     const query=`subscription ModeVehicles($mode: VehicleModeEnumeration!, $boundingBox: BoundingBox) {
       vehicles(mode:$mode, boundingBox:$boundingBox, monitored:true, maxDataAge:"PT5M") {
-       mode vehicleId vehicleRef originName destinationName line { name publicCode }
+       mode vehicleId vehicleRef originName destinationName line { lineRef lineName publicCode }
        location { latitude longitude } lastUpdated delay serviceJourney { id date }
       }
     }`;
@@ -669,7 +670,7 @@ function updateAllVehicleMarkers() {
   if(!Number.isFinite(lat)||!Number.isFinite(lon))continue;
   const journeyId=vehicle.journeyId||vehicle.serviceJourney?.id;
   const call=state.departures.find(item=>item.serviceJourney?.id===journeyId);
-  const route=vehicle.line?.publicCode||vehicle.line?.name||call?.serviceJourney?.journeyPattern?.line?.publicCode||call?.serviceJourney?.journeyPattern?.line?.name||"";
+  const route=vehicle.line?.publicCode||vehicle.line?.lineName||vehicle.line?.lineRef||call?.serviceJourney?.journeyPattern?.line?.publicCode||call?.serviceJourney?.journeyPattern?.line?.name||"";
   if(!inScope(journeyId))continue;
   const mode=vehicle.mode||"",style=transportModeStyle(mode,route),point=[lat,lon],key="entur:"+id;
   activeKeys.add(key);
