@@ -152,10 +152,9 @@ function renderBoard() {
       <div class="destination">${route ? `<span class="route-badge" style="background:${routeStyle.color}">${routeStyle.icon} ${esc(route)}</span>` : ""}${esc(destination)}<span class="sub">${vehicle ? esc(vehicle.mode || vehicle.codespace || vehicle.source || "") : " "}</span></div>
       <div class="platform quay">${esc(quay)}</div>
       <div class="status ${delayClass}">${esc(delayText)}<span class="sub">${hasCoords ? "GPS position available" : "No GPS position match"}</span></div>
-      <div class="vehicle"><span class="pill" title="${esc(vehicleLabel)}">${esc(vehicleLabel)}</span><span class="sub">${esc(coords)}</span>${hasCoords && journeyId ? `<button type="button" data-map-journey="${esc(journeyId)}">Show map</button>` : ""}</div>
+      <div class="vehicle"><span class="pill" title="${esc(vehicleLabel)}">${esc(vehicleLabel)}</span><span class="sub">${esc(coords)}</span></div>
     </article>`;
   }).join("");
-  $("rows").querySelectorAll("[data-map-journey]").forEach(button => button.addEventListener("click", () => showVehicleMap(button.dataset.mapJourney)));
   $("stop-name").textContent = state.stopName || $("stop-id").value.trim();
   renderStopMetadata();
   $("date-label").textContent = "Live data · " + new Date().toLocaleDateString();
@@ -534,7 +533,7 @@ async function probeRuter() {
           state.ruterProgress.set(journeyId, progress);
           renderBoard();
           if (state.mapMode === "all") updateAllVehicleMarkers();
-          else if (state.selectedMapJourney === journeyId) updateVehicleMap(ruterVehicleFor(journeyId),journeyId);
+
           const vehicleRef = progress.vehicleRef || progress.vehicleId || progress.vehicle?.id || null;
           log("Ruter vehicleProgress for "+journeyId+
             (vehicleRef ? " · vehicle "+vehicleRef : " · physical vehicle ID not present in selected fields")+
@@ -687,45 +686,11 @@ function updateAllVehicleMarkers() {
  else if(!bounds.length)$("map-subtitle").textContent+=" · No matching live positions yet";
  setTimeout(()=>state.map?.invalidateSize(),0);
 }
-function updateVehicleMap(vehicle, journeyId) {
- if(state.mapMode==="all"){updateAllVehicleMarkers();return;}
- const lat=Number(vehicle?.location?.latitude),lon=Number(vehicle?.location?.longitude);
- if(!Number.isFinite(lat)||!Number.isFinite(lon))return;
- initVehicleMap();if(!state.map)return;
- const call=state.departures.find(item=>item.serviceJourney?.id===journeyId);
- const route=call?.serviceJourney?.journeyPattern?.line?.publicCode||call?.serviceJourney?.journeyPattern?.line?.name||"";
- const style=transportModeStyle(vehicle?.mode||vehicle?.codespace||"",route);
- const point=[lat,lon];
- if(!state.mapMarker)state.mapMarker=L.marker(point,{icon:transportModeIcon(vehicle?.mode||vehicle?.codespace||"",route)}).addTo(state.map);
- else {state.mapMarker.setLatLng(point);state.mapMarker.setIcon(transportModeIcon(vehicle?.mode||vehicle?.codespace||"",route));}
- state.mapMarker.bindPopup("<b>"+esc(route||style.label)+" · "+esc(style.label)+"</b><br>"+esc(vehicle.vehicleId||vehicle.vehicleRef||"Vehicle")+"<br>"+lat.toFixed(5)+", "+lon.toFixed(5));
- state.map.panTo(point,{animate:false});
- $("map-subtitle").textContent=(vehicle.vehicleId||vehicle.vehicleRef||style.label)+" · "+lat.toFixed(5)+", "+lon.toFixed(5)+" · GPS position";
- setTimeout(()=>state.map?.invalidateSize(),0);
-}
 function showAllSyncedBuses(){
  clearVehicleMarkers();state.mapMode="all";state.selectedMapJourney=null;
  $("map-panel").hidden=false;
  $("map-title").textContent=state.trackAllMode ? "ALL LIVE VEHICLES · ALL OPERATORS" : "VEHICLES SERVING SELECTED STOP";
  updateAllVehicleMarkers();setTimeout(()=>state.map?.invalidateSize(),50);
- $("map-panel").scrollIntoView({behavior:"smooth",block:"nearest"});
-}
-function showVehicleMap(journeyId){
- let vehicle=state.vehicles.find(item=>item.journeyId===journeyId)||null;
- if(!vehicle){
-  const entur=[...state.extraModeProgress.values()].find(item=>item.serviceJourney?.id===journeyId);
-  if(entur)vehicle={...entur,source:"Entur",location:entur.location};
- }
- if(!vehicle)vehicle=ruterVehicleFor(journeyId);
- if(!vehicle?.location)return;
- const lat=Number(vehicle.location.latitude),lon=Number(vehicle.location.longitude);
- if(!Number.isFinite(lat)||!Number.isFinite(lon))return;
- clearVehicleMarkers();state.mapMode="single";state.selectedMapJourney=journeyId;$("map-panel").hidden=false;
- const call=state.departures.find(item=>item.serviceJourney?.id===journeyId);
- const route=call?.serviceJourney?.journeyPattern?.line?.publicCode||call?.serviceJourney?.journeyPattern?.line?.name||"";
- const style=transportModeStyle(vehicle.mode||vehicle.codespace||"",route);
- $("map-title").textContent=(route||style.label)+" · SELECTED STOP VEHICLE";
- updateVehicleMap(vehicle,journeyId);setTimeout(()=>state.map?.invalidateSize(),50);
  $("map-panel").scrollIntoView({behavior:"smooth",block:"nearest"});
 }
 async function searchStops(query){
@@ -753,7 +718,18 @@ function setupStopSearch(){
  $("stop-search").addEventListener("keydown",event=>{if(event.key==="Enter"){const first=$("stop-suggestions").querySelector(".suggestion");if(first){event.preventDefault();first.click();}}});
  document.addEventListener("click",e=>{if(!e.target.closest(".stop-search-wrap"))$("stop-suggestions").hidden=true;});
 }
-$("map-center").addEventListener("click",()=>{if(state.mapMode==="all"){const bounds=[...state.allBusMarkers.values(),...state.allModeMarkers.values()].map(marker=>marker.getLatLng());if(bounds.length)state.map.fitBounds(bounds,{padding:[28,28],maxZoom:15});}else if(state.selectedMapJourney){showVehicleMap(state.selectedMapJourney);}});
+$("map-center").addEventListener("click",()=>{const bounds=[...state.allBusMarkers.values(),...state.allModeMarkers.values()].map(marker=>marker.getLatLng());if(bounds.length)state.map.fitBounds(bounds,{padding:[28,28],maxZoom:15);});
+$("map-selected-stop").addEventListener("click",()=>{
+  const wasGlobal=state.trackAllMode;
+  state.trackAllMode=false;
+  if(wasGlobal){
+    if(state.extraModeSocket){try{state.extraModeSocket.close(1000,"Selected-stop scope");}catch{}state.extraModeSocket=null;}
+    state.extraModeProgress.clear();
+    closeRuterSocket();
+  }
+  showAllSyncedBuses();
+  if(wasGlobal)probeRuter();
+});
 $("map-close").addEventListener("click",()=>{$("map-panel").hidden=true;});
 $("map-fullscreen").addEventListener("click",async()=>{try{if(!document.fullscreenElement)await $("map-panel").requestFullscreen();else await document.exitFullscreen();}catch(e){log("Fullscreen unavailable: "+e.message,"error");}});
 document.addEventListener("fullscreenchange",()=>{$("map-fullscreen").textContent=document.fullscreenElement?"Exit fullscreen":"Fullscreen";setTimeout(()=>state.map?.invalidateSize(),80);});
