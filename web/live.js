@@ -195,8 +195,6 @@ const RUTER_PROGRESS_SUBSCRIPTION = `subscription vehicleProgress($id: String!, 
   }
 }`;
 function closeRuterSocket() {
-  if (state.extraModeSocket) { try { state.extraModeSocket.close(1000, "Ruter reconnect"); } catch {} state.extraModeSocket = null; }
-  state.extraModeProgress.clear();
   if (state.ruterSocket) { try { state.ruterSocket.close(1000, "Ruter reconnect"); } catch {} state.ruterSocket = null; }
   state.ruterProgress.clear(); state.ruterRouteDepartures.clear(); state.ruterJourneyRoutes.clear(); state.ruterLineSubscriptions.clear(); state.ruterJourneySubscriptions.clear();
 }
@@ -300,7 +298,7 @@ function connectEnturModeTracking() {
  const bounds={minLat:59.0,minLon:9.5,maxLat:60.5,maxLon:11.8};
  const pending=new Map();
  ws.onopen=()=>ws.send(JSON.stringify({type:"connection_init",payload:{"ET-Client-Name":CONFIG.enturClient}}));
- ws.onerror=()=>log("Entur vehicle-position WebSocket network error.","error");
+ ws.onerror=()=>{log("Entur vehicle-position WebSocket network error.","error");$("route-filter-status").textContent="Entur train/tram/boat stream failed. Check diagnostics; Ruter bus tracking can continue.";};
  ws.onclose=e=>{if(state.extraModeSocket===ws){state.extraModeSocket=null;log("Entur vehicle-position stream closed ("+e.code+").","error");}};
  ws.onmessage=event=>{
   let msg;try{msg=JSON.parse(event.data);}catch{return;}
@@ -317,7 +315,7 @@ function connectEnturModeTracking() {
     pending.set(id,mode);
     ws.send(JSON.stringify({id,type:"subscribe",payload:{operationName:"ModeVehicles",query,variables:{mode,boundingBox:bounds}}}));
    });
-   $("route-filter-status").textContent="Ruter buses plus Entur live tracking for trains, trams and boats within the Oslo region.";
+   $("route-filter-status").textContent="Ruter buses plus Entur live trains, trams and boats in the Oslo region. Marker colors: bus red · tram light blue · train green · boat dark blue.";
    return;
   }
   if(msg.type==="next"){
@@ -655,7 +653,7 @@ function showAllSyncedBuses(){
  clearVehicleMarkers();state.mapMode="all";state.selectedMapJourney=null;
  $("map-panel").hidden=false;
  $("map-title").textContent=state.selectedRouteFilter
-  ? "ROUTE "+state.selectedRouteFilter+" · LIVE BUSES" : "ALL SYNCED BUSES · LIVE";
+  ? "ROUTE "+state.selectedRouteFilter+" · LIVE BUSES" : "ALL LIVE VEHICLES · BUSES, TRAINS, TRAMS & BOATS";
  updateAllVehicleMarkers();setTimeout(()=>state.map?.invalidateSize(),50);
  $("map-panel").scrollIntoView({behavior:"smooth",block:"nearest"});
 }
