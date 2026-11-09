@@ -656,7 +656,7 @@ function updateAllVehicleMarkers() {
   const journeyId=vehicle.journeyId||vehicle.serviceJourney?.id;
   const call=state.departures.find(item=>item.serviceJourney?.id===journeyId);
   const route=vehicle.line?.publicCode||vehicle.line?.name||call?.serviceJourney?.journeyPattern?.line?.publicCode||call?.serviceJourney?.journeyPattern?.line?.name||"";
-  if(!matchesRoute(route))continue;
+  if(!inScope(journeyId))continue;
   const mode=vehicle.mode||"",style=transportModeStyle(mode,route),point=[lat,lon],key="entur:"+id;
   activeKeys.add(key);
   let marker=state.allModeMarkers.get(key);
