@@ -392,7 +392,7 @@ async function probeRuter() {
       $("tracking-status").textContent = "Following departures at "+(state.stopName || "the selected stop")+" · "+ruterKeys.length+" bus subscriptions found.";
     }
     if (!ruterKeys.length) {
-      throw new Error("No Ruter-operated departures were found at the selected stop. Use “Connect Ruter live data · all lines” or select a stop served by Ruter buses.");
+      throw new Error(state.trackAllMode ? "No Ruter bus subscriptions were found. Entur tracking can continue independently." : "No Ruter-operated departures were found at this stop. Entur departures and GPS positions can still appear.");
     }
 
     const ws = new WebSocket(CONFIG.ruterUrl.replace(/^https:/, "wss:").replace(/^http:/, "ws:"), "graphql-transport-ws");
@@ -750,6 +750,7 @@ function setupStopSearch(){
  $("stop-search").value="Jernbanetorget";
  $("stop-search").placeholder="Search a stop and select it to filter departures";
  $("stop-search").addEventListener("input",()=>{const q=$("stop-search").value.trim();clearTimeout(state.searchTimer);if(q.length<2){$("stop-suggestions").hidden=true;return;}state.searchTimer=setTimeout(()=>searchStops(q),180);});
+ $("stop-search").addEventListener("keydown",event=>{if(event.key==="Enter"){const first=$("stop-suggestions").querySelector(".suggestion");if(first){event.preventDefault();first.click();}}});
  document.addEventListener("click",e=>{if(!e.target.closest(".stop-search-wrap"))$("stop-suggestions").hidden=true;});
 }
 $("map-center").addEventListener("click",()=>{if(state.mapMode==="all"){const bounds=[...state.allBusMarkers.values(),...state.allModeMarkers.values()].map(marker=>marker.getLatLng());if(bounds.length)state.map.fitBounds(bounds,{padding:[28,28],maxZoom:15});}else if(state.selectedMapJourney){showVehicleMap(state.selectedMapJourney);}});
