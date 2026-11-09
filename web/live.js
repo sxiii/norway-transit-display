@@ -505,7 +505,7 @@ $("refresh").addEventListener("click", refreshEntur);
 $("ruter-probe").addEventListener("click", () => { state.selectedRouteFilter=""; probeRuter(); });
 $("route-track").addEventListener("click", () => {
   const route=$("route-number").value.trim();
-  if (!/^\\d+[A-Za-z]?$/.test(route)) {
+  if (!/^\d+[A-Za-z]?$/.test(route)) {
     $("route-filter-status").textContent="Enter a route number, e.g. 83.";
     return;
   }
