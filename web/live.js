@@ -708,7 +708,7 @@ async function searchStops(query){
   stops.slice(0,8).forEach(stop=>{
    const b=document.createElement("button");b.type="button";b.className="suggestion";
    b.innerHTML=esc(stop.name)+"<small>"+esc([stop.area,stop.id].filter(Boolean).join(" · "))+"</small>";
-   b.addEventListener("click",()=>{$("stop-id").value=stop.id;$("stop-search").value=stop.name;box.hidden=true;state.trackAllMode=false;state.ruterProgress.clear();state.selectedMapJourney=null;if(state.mapMode==="all"){clearVehicleMarkers();state.mapMode="single";}$("map-panel").hidden=true;$("tracking-status").textContent="Loading departures and vehicle positions for "+stop.name+"…";refreshEntur(true);});
+   b.addEventListener("click",()=>{$("stop-id").value=stop.id;$("stop-search").value=stop.name;box.hidden=true;state.trackAllMode=false;closeRuterSocket();state.selectedMapJourney=null;if(state.mapMode==="all"){clearVehicleMarkers();state.mapMode="single";}$("map-panel").hidden=true;$("tracking-status").textContent="Loading departures and vehicle positions for "+stop.name+"…";refreshEntur(true);});
    box.append(b);
   });box.hidden=false;
  }catch(e){if(e.name!=="AbortError")log("Stop search failed: "+e.message,"error");}
