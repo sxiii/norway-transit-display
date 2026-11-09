@@ -307,12 +307,12 @@ function connectEnturModeTracking() {
  state.extraModeProgress.clear();
  const ws=new WebSocket(CONFIG.vehicleSubscriptionsUrl,"graphql-transport-ws");
  state.extraModeSocket=ws;
- const modes=["TRAM","RAIL","FERRY"];
- const labels={TRAM:"trams",RAIL:"trains",FERRY:"boats"};
+ const modes=["METRO","TRAM","RAIL","FERRY"];
+ const labels={METRO:"T-Bane metro trains",TRAM:"trams",RAIL:"trains",FERRY:"boats"};
  const bounds={minLat:59.0,minLon:9.5,maxLat:60.5,maxLon:11.8};
  const pending=new Map();
  ws.onopen=()=>ws.send(JSON.stringify({type:"connection_init",payload:{"ET-Client-Name":CONFIG.enturClient}}));
- ws.onerror=()=>{log("Entur vehicle-position WebSocket network error.","error");$("route-filter-status").textContent="Entur train/tram/boat stream failed. Check diagnostics; Ruter bus tracking can continue.";};
+ ws.onerror=()=>{log("Entur vehicle-position WebSocket network error.","error");$("route-filter-status").textContent="Entur metro/train/tram/boat stream failed. Check diagnostics; Ruter bus tracking can continue.";};
  ws.onclose=e=>{if(state.extraModeSocket===ws){state.extraModeSocket=null;log("Entur vehicle-position stream closed ("+e.code+").","error");}};
  ws.onmessage=event=>{
   let msg;try{msg=JSON.parse(event.data);}catch{return;}
@@ -329,7 +329,7 @@ function connectEnturModeTracking() {
     pending.set(id,mode);
     ws.send(JSON.stringify({id,type:"subscribe",payload:{operationName:"ModeVehicles",query,variables:{mode,boundingBox:bounds}}}));
    });
-   $("route-filter-status").textContent="Ruter buses plus Entur live trains, trams and boats in the Oslo region. Marker colors: bus red · tram light blue · train green · boat dark blue.";
+   $("route-filter-status").textContent="Ruter buses plus Entur live T-Bane, trains, trams and boats in the Oslo region.";
    return;
   }
   if(msg.type==="next"){
@@ -660,7 +660,7 @@ function updateAllVehicleMarkers() {
   bounds.push(point);extraCount++;
  }
  $("map-subtitle").textContent=(state.selectedRouteFilter ? "Route "+state.selectedRouteFilter+" · " : "")+
-  count+" buses · "+extraCount+" trains, trams & boats with live positions · updates in real time";
+  count+" buses · "+extraCount+" metro, trains, trams & boats with live positions · updates in real time";
  if(bounds.length&&!state.allBusMarkersFitted){state.map.fitBounds(bounds,{padding:[28,28],maxZoom:15});state.allBusMarkersFitted=true;}
  setTimeout(()=>state.map?.invalidateSize(),0);
 }
