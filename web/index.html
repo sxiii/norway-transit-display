@@ -71,7 +71,16 @@ footer{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;color:
   </div>
   <div class="providers">
     <div class="provider"><h3>Entur · Public APIs</h3><div id="entur-status" class="status-line working"><div><span class="status-label">Connecting</span><span class="status-detail">Journey Planner + VYG/VYX vehicle positions</span></div></div></div>
-    <div class="provider"><h3>Ruter · App GraphQL API</h3><div id="ruter-status" class="status-line"><div><span class="status-label">Not tested</span><span class="status-detail">Anonymous token + live departuresByLine / vehicleProgress subscriptions</span></div></div><div id="ruter-details">Ruter probe is manual. No account credentials are used; the anonymous token is kept in memory and never displayed.</div><details id="ruter-debug"><summary>WebSocket diagnostics · raw messages</summary><pre id="ruter-raw">No WebSocket messages captured yet.</pre></details><div style="margin-top:10px"><button id="ruter-probe" type="button">Connect Ruter live data</button> <button id="ruter-all-map" type="button">Open map with all synced buses</button></div></div>
+    <div class="provider"><h3>Ruter · App GraphQL API</h3><div id="ruter-status" class="status-line"><div><span class="status-label">Not tested</span><span class="status-detail">Anonymous token + live departuresByLine / vehicleProgress subscriptions</span></div></div><div id="ruter-details">Ruter probe is manual. No account credentials are used; the anonymous token is kept in memory and never displayed.</div><details id="ruter-debug"><summary>WebSocket diagnostics · raw messages</summary><pre id="ruter-raw">No WebSocket messages captured yet.</pre></details><div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button id="ruter-probe" type="button">Connect Ruter live data · all lines</button> <button id="ruter-all-map" type="button">Open map with synced buses</button></div>
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid #523047">
+        <label for="route-number" style="display:block;color:#d1a9bd;font-size:13px;font-weight:700;margin-bottom:7px">Track one bus route</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <input id="route-number" type="text" inputmode="numeric" maxlength="6" placeholder="e.g. 83" aria-label="Bus route number" style="width:110px">
+          <button id="route-track" type="button">Track route</button>
+          <button id="route-clear" type="button">Clear filter</button>
+        </div>
+        <div id="route-filter-status" class="status-detail" aria-live="polite">Enter a route number to subscribe to matching departures and show only that route on the map.</div>
+      </div></div>
   </div>
 </section>
 <section class="board">
