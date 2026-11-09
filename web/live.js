@@ -110,7 +110,9 @@ function renderBoard() {
   if (!calls.length) {
     $("rows").innerHTML = state.selectedRouteFilter
       ? '<div class="empty"><strong>No live route '+esc(state.selectedRouteFilter)+' buses received yet</strong>Waiting for vehicle positions from the route-wide subscriptions.</div>'
-      : '<div class="empty"><strong>No departures loaded</strong>Check the stop ID and Entur connection.</div>';
+      : state.trackAllMode
+        ? '<div class="empty"><strong>Waiting for live buses</strong>All Ruter bus lines are being subscribed across their stops. Rows will appear as vehicle positions arrive.</div>'
+        : '<div class="empty"><strong>No departures loaded</strong>Check the stop ID and Entur connection.</div>';
     return;
   }
   const sorted = [...calls].sort((a,b) => new Date(a.expectedDepartureTime || a.aimedDepartureTime || 0) - new Date(b.expectedDepartureTime || b.aimedDepartureTime || 0));
