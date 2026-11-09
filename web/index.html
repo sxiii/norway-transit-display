@@ -84,6 +84,20 @@ footer{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;color:
   </div>
   <div class="providers">
     <div class="provider">
+      <h3>Ruter · Live tracking controls</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button id="ruter-probe" type="button">Connect Ruter live data · all lines</button> <button id="ruter-all-map" type="button">Open map</button></div>
+    </div>
+    <div class="provider">
+      <h3>Track one bus route</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input id="route-number" type="text" inputmode="numeric" maxlength="6" placeholder="e.g. 83" aria-label="Bus route number" style="width:110px">
+        <button id="route-track" type="button">Track route</button>
+        <button id="track-all" type="button">Track all</button>
+        <button id="route-clear" type="button">Clear filter</button>
+      </div>
+      <div id="route-filter-status" class="status-detail" aria-live="polite">Track route follows every stop served by a bus line. Track all adds live trains, trams and boats across the Oslo region. Colors: <span style="color:#e30613">bus red</span> · <span style="color:#8fdcff">tram light blue</span> · <span style="color:#35c46a">train green</span> · <span style="color:#174f9b">boat dark blue</span>.</div>
+    </div>
+    <div class="provider">
       <h3>Entur · Public APIs</h3>
       <div id="entur-status" class="status-line working"><div><span class="status-label">Connecting</span><span class="status-detail">Journey Planner + VYG/VYX vehicle positions</span></div></div>
     </div>
@@ -95,20 +109,6 @@ footer{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;color:
         <div id="ruter-details">Ruter probe is manual. No account credentials are used; the anonymous token is kept in memory and never displayed.</div>
         <details id="ruter-debug"><summary>WebSocket diagnostics · raw messages</summary><pre id="ruter-raw">No WebSocket messages captured yet.</pre></details>
       </details>
-    </div>
-  </div>
-  <div class="provider" style="margin-top:12px">
-    <h3>Ruter · Live tracking controls</h3>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button id="ruter-probe" type="button">Connect Ruter live data · all lines</button> <button id="ruter-all-map" type="button">Open map</button></div>
-    <div style="margin-top:14px;padding-top:12px;border-top:1px solid #523047">
-      <label for="route-number" style="display:block;color:#d1a9bd;font-size:13px;font-weight:700;margin-bottom:7px">Track one bus route</label>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <input id="route-number" type="text" inputmode="numeric" maxlength="6" placeholder="e.g. 83" aria-label="Bus route number" style="width:110px">
-        <button id="route-track" type="button">Track route</button>
-        <button id="track-all" type="button">Track all</button>
-        <button id="route-clear" type="button">Clear filter</button>
-      </div>
-      <div id="route-filter-status" class="status-detail" aria-live="polite">Track route follows every stop served by a bus line. Track all adds live trains, trams and boats across the Oslo region. Colors: <span style="color:#e30613">bus red</span> · <span style="color:#8fdcff">tram light blue</span> · <span style="color:#35c46a">train green</span> · <span style="color:#174f9b">boat dark blue</span>.</div>
     </div>
   </div>
 </section>
