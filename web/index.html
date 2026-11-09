@@ -77,6 +77,7 @@ footer{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;color:
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <input id="route-number" type="text" inputmode="numeric" maxlength="6" placeholder="e.g. 83" aria-label="Bus route number" style="width:110px">
           <button id="route-track" type="button">Track route</button>
+          <button id="track-all" type="button">Track all</button>
           <button id="route-clear" type="button">Clear filter</button>
         </div>
         <div id="route-filter-status" class="status-detail" aria-live="polite">Route tracking looks up the line in Entur Transit Data, discovers all served stops, then subscribes to Ruter live departures at those stops.</div>
