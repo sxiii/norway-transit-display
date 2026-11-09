@@ -100,9 +100,22 @@ function renderBoard() {
     const journeyId=call.serviceJourney?.id;
     return n + (journeyId && (vehiclesByJourney.has(journeyId) || !!ruterVehicleFor(journeyId)) ? 1 : 0);
   }, 0);
-  const gpsCount = state.vehicles.filter(v=>Number.isFinite(Number(v.location?.latitude))&&Number.isFinite(Number(v.location?.longitude))).length
-    + [...state.extraModeProgress.values()].filter(v=>Number.isFinite(Number(v.location?.latitude))&&Number.isFinite(Number(v.location?.longitude))).length
-    + [...state.ruterProgress.values()].filter(v=>Number.isFinite(Number(v.latitude))&&Number.isFinite(Number(v.longitude))).length;
+  const selectedJourneys=new Set(calls.map(call=>call.serviceJourney?.id).filter(Boolean));
+  const gpsJourneys=new Set();
+  for(const vehicle of state.vehicles){
+    if(vehicle.journeyId && Number.isFinite(Number(vehicle.location?.latitude)) && Number.isFinite(Number(vehicle.location?.longitude)) &&
+       (state.trackAllMode || selectedJourneys.has(vehicle.journeyId))) gpsJourneys.add(vehicle.journeyId);
+  }
+  for(const vehicle of state.extraModeProgress.values()){
+    const journeyId=vehicle.serviceJourney?.id;
+    if(journeyId && Number.isFinite(Number(vehicle.location?.latitude)) && Number.isFinite(Number(vehicle.location?.longitude)) &&
+       (state.trackAllMode || selectedJourneys.has(journeyId))) gpsJourneys.add(journeyId);
+  }
+  for(const [journeyId,progress] of state.ruterProgress){
+    if(Number.isFinite(Number(progress.latitude)) && Number.isFinite(Number(progress.longitude)) &&
+       (state.trackAllMode || selectedJourneys.has(journeyId))) gpsJourneys.add(journeyId);
+  }
+  const gpsCount=gpsJourneys.size;
   $("departure-count").textContent = calls.length;
   $("vehicle-count").textContent = gpsCount;
   $("matched-count").textContent = matched;
@@ -784,6 +797,6 @@ $("file").addEventListener("change", async event => {
 function tick() { $("clock").textContent = new Intl.DateTimeFormat(undefined,{hour:"2-digit",minute:"2-digit",second:"2-digit"}).format(new Date()); }
 tick(); setInterval(tick,1000);
 $("stop-id").value = CONFIG.defaultStop;
-log("Ready. Entur auto-refresh is enabled; Ruter is an explicit one-click probe.");
+log("Ready. The departure board is scoped to the selected stop; use Track everything for global vehicle positions.");
 refreshEntur(true);
 state.timer = setInterval(refreshEntur, CONFIG.refreshMs);
