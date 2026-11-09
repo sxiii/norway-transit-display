@@ -135,9 +135,10 @@ function renderBoard() {
     const quay = call.quay?.name || call.quay?.id || "—";
     const vehicleLabel = vehicle?.vehicleId || (vehicle?.source === "Ruter" ? "Ruter live" : vehicle ? "Tracked" : "Not matched");
     const coords = vehicle?.location?.latitude != null ? vehicle.location.latitude.toFixed(4) + ", " + vehicle.location.longitude.toFixed(4) : "";
+    const routeStyle=selectedStopModeStyle() || transportModeStyle("",route);
     return `<article class="departure">
       <div class="time">${esc(time)}<span class="sub">${call.realtime ? "Expected" : "Scheduled"}</span></div>
-      <div class="destination">${route ? `<span class="route-badge">${esc(route)}</span>` : ""}${esc(destination)}<span class="sub">${vehicle ? esc(vehicle.mode || vehicle.codespace) : " "}</span></div>
+      <div class="destination">${route ? `<span class="route-badge" style="background:${routeStyle.color}">${esc(route)}</span>` : ""}${esc(destination)}<span class="sub">${vehicle ? esc(vehicle.mode || vehicle.codespace) : " "}</span></div>
       <div class="platform quay">${esc(quay)}</div>
       <div class="status ${delayClass}">${esc(delayText)}<span class="sub">${vehicle ? "Vehicle position available" : "No position match"}</span></div>
       <div class="vehicle"><span class="pill" title="${esc(vehicleLabel)}">${esc(vehicleLabel)}</span><span class="sub">${esc(coords)}</span>${vehicle?.source === "Ruter" && vehicle.location?.latitude != null ? `<button type="button" data-map-journey="${esc(journeyId)}">Show map</button>` : ""}</div>
@@ -577,11 +578,19 @@ function busRouteNumber(journeyId) {
  return state.ruterJourneyRoutes.get(journeyId) || call?.serviceJourney?.journeyPattern?.line?.publicCode ||
   call?.serviceJourney?.journeyPattern?.line?.name || "";
 }
+function selectedStopModeStyle() {
+ const modes=(state.stopTransportModes||[]).flat(Infinity).map(value=>String(value||"").toUpperCase());
+ // A stop served only by trams provides reliable mode context for its labels
+ // and Ruter-style numbered map markers (which otherwise default to red).
+ if(modes.length && modes.every(mode=>mode.includes("TRAM"))) return {color:"#8fdcff",label:"Tram"};
+ return null;
+}
 function busNumberIcon(route) {
  const number=String(route||"").trim();
+ const style=selectedStopModeStyle() || transportModeStyle("",route);
  return L.divIcon({
   className:"bus-number-marker",
-  html:'<span class="bus-number-dot">'+(number?esc(number):"")+'</span>',
+  html:'<span class="bus-number-dot" style="background:'+style.color+'">'+(number?esc(number):"")+'</span>',
   iconSize:[30,30],
   iconAnchor:[15,15],
   popupAnchor:[0,-15]
