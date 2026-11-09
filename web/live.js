@@ -104,7 +104,16 @@ function renderBoard() {
     const list = vehiclesByJourney.get(v.journeyId) || [];
     list.push(v); vehiclesByJourney.set(v.journeyId, list);
   }
-  const matched = calls.reduce((n, c) => n + (vehiclesByJourney.has(c.serviceJourney?.id) ? 1 : 0), 0);
+  // Entur's live mode subscriptions are stored separately from the initial
+  // vehicle query. Join them to departures by the Transmodel serviceJourney ID.
+  for (const [key, v] of state.extraModeProgress) {
+    const journeyId = v.serviceJourney?.id;
+    if (!journeyId || !v.location) continue;
+    const list = vehiclesByJourney.get(journeyId) || [];
+    list.push({...v, source:"Entur", vehicleId:v.vehicleId || v.vehicleRef || key, journeyId});
+    vehiclesByJourney.set(journeyId, list);
+  }
+  const matched = calls.reduce((n, c) => n + (vehiclesByJourney.has(c.serviceJourney?.id) || !!ruterVehicleFor(c.serviceJourney?.id) ? 1 : 0), 0);
   $("departure-count").textContent = calls.length;
   $("vehicle-count").textContent = state.vehicles.length;
   $("matched-count").textContent = matched;
