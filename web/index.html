@@ -48,6 +48,11 @@ footer{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;color:
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><style>.stop-search-wrap{position:relative;flex:1;min-width:260px}#stop-search{width:100%;background:#120a10;color:#fff3f8;border:1px solid #684057;border-radius:9px;padding:10px 12px;font:inherit}.suggestions{position:absolute;z-index:1200;top:calc(100% + 5px);left:0;right:0;max-height:300px;overflow:auto;background:#21121d;border:1px solid #70465f;border-radius:10px;box-shadow:0 12px 35px #0009}.suggestion{display:block;width:100%;text-align:left;border:0;border-radius:0;border-bottom:1px solid #49303e;background:transparent;padding:11px 13px}.suggestion small{display:block;color:#c29aaf;font-weight:500;margin-top:3px}.map-panel{padding:12px}.map-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}.map-heading h2{margin:0}.map-subtitle{font-size:12px;color:#c29aaf;margin-top:4px}.map-actions{display:flex;gap:6px;flex-wrap:wrap}.map-actions button{padding:7px 10px}#vehicle-map{height:245px;width:100%;border-radius:10px;background:#21121d;overflow:hidden}.map-panel:fullscreen{background:#10070d;padding:20px;display:flex;flex-direction:column}.map-panel:fullscreen #vehicle-map{height:auto;flex:1;min-height:0}.leaflet-control-attribution{font-size:9px!important;opacity:.75}.departure .vehicle button{margin-top:6px;padding:5px 9px;font-size:11px}@media(max-width:760px){.map-heading{align-items:flex-start;flex-direction:column}#vehicle-map{height:220px}}
 .bus-number-marker{background:transparent!important;border:0!important}
 .bus-number-dot{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border:2px solid #fff;border-radius:50%;background:#e30613;color:#fff;font:800 11px/1 Inter,ui-sans-serif,system-ui,sans-serif;letter-spacing:-.03em;box-shadow:0 1px 5px #0009;text-shadow:0 1px 1px #700}
+.stop-meta-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.stop-meta-grid>div{min-width:0;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.stop-meta-grid span{display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
+.stop-meta-grid strong{display:block;overflow-wrap:anywhere;font-size:14px}
+@media(max-width:700px){.stop-meta-grid{grid-template-columns:1fr}}
 </style></head>
 <body>
 <main class="shell">
@@ -59,6 +64,14 @@ footer{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;color:
   <div class="stat"><strong id="departure-count">—</strong><span>Departures shown</span></div>
   <div class="stat"><strong id="vehicle-count">—</strong><span>Tracked vehicles</span></div>
   <div class="stat"><strong id="matched-count">—</strong><span>Matched journeys</span></div>
+</section>
+<section class="panel stop-metadata">
+  <h2>Selected stop details</h2>
+  <div class="stop-meta-grid">
+    <div><span>NSR StopPlace ID</span><strong id="selected-stop-id">—</strong></div>
+    <div><span>Stop type</span><strong id="selected-stop-type">—</strong></div>
+    <div><span>Transport modes</span><strong id="selected-stop-modes">—</strong></div>
+  </div>
 </section>
 <section class="panel">
   <h2>Live data configuration</h2>
