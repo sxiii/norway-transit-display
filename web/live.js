@@ -195,6 +195,7 @@ async function refreshEntur() {
     $("stop-name").textContent = stop.name || stopId;
     renderStopMetadata();
     renderBoard();
+    if(state.mapMode==="all")updateAllVehicleMarkers();
     setStatus("entur-status", "Connected", "ok", stop.name + " · " + state.departures.length + " departures · " + state.vehicles.length + " vehicles");
     log("Entur refreshed: " + state.departures.length + " departures, " + state.vehicles.length + " VYG/VYX vehicles.", "success");
     if (!state.ruterAutoStarted) { state.ruterAutoStarted = true; probeRuter(); }
@@ -803,6 +804,7 @@ $("file").addEventListener("change", async event => {
     }));
     state.stopName = data.stop_place?.name || data.stop_place?.id || "Transit departures";
     state.lastUpdated = Date.now(); renderBoard();
+    if(state.mapMode==="all")updateAllVehicleMarkers();
     log("Loaded local snapshot JSON.", "success");
   } catch (error) { log("Could not load JSON: " + error.message, "error"); }
 });
