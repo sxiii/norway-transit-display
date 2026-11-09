@@ -56,7 +56,7 @@ function vehicleQuery(code) {
 function departureQuery(stopId, count) {
   const id = JSON.stringify(stopId);
   return `query { stopPlace(id: ${id}) {
-    id name transportMode otherTransportModes stopType
+    id name transportMode otherTransportModes stopPlaceType
     estimatedCalls(numberOfDepartures: ${count}) {
       realtime aimedDepartureTime expectedDepartureTime actualDepartureTime
       destinationDisplay { frontText }
@@ -177,7 +177,7 @@ async function refreshEntur() {
     const stop = departureData.stopPlace;
     if (!stop) throw new Error("Entur returned no stopPlace for " + stopId);
     state.stopName = stop.name || stopId;
-    state.stopType = stop.stopType || "";
+    state.stopType = stop.stopPlaceType || "";
     state.stopTransportModes = [...new Set([stop.transportMode, ...(stop.otherTransportModes || [])].filter(Boolean))];
     state.departures = stop.estimatedCalls || [];
     state.vehicles = flattenVehicles([{code:"VYG",data:vyg},{code:"VYX",data:vyx}]);
