@@ -23,7 +23,10 @@ input[type=text],input[type=number]{background:#120a10;color:#fff3f8;border:1px 
 button,.file-label{border:1px solid #70465f;border-radius:10px;background:#32182a;color:#eaf3fc;padding:10px 14px;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
 button:hover,.file-label:hover{background:#4a2340}
 input[type=file]{display:none}.check{display:flex;align-items:center;gap:7px;color:#d1a9bd;font-size:13px}
-.providers{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:14px}
+.providers{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px}
+.tracking-action{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-top:14px;padding:14px 16px;background:#21121d;border:1px solid #70465f;border-radius:12px}
+.tracking-action h3{margin:0 0 5px;font-size:14px}.tracking-action p{margin:0;color:#c9a8ba;font-size:12px;line-height:1.5}.tracking-action button{flex:none;background:#4b2039;border-color:#a65d83}.config-help{margin-top:9px;color:#c29aaf;font-size:12px}.tracking-action .status-detail{margin-top:7px}
+@media(max-width:760px){.tracking-action{align-items:flex-start;flex-direction:column}.tracking-action button{width:100%}}
 .provider{background:#21121d;border:1px solid #523047;border-radius:12px;padding:13px 15px;min-width:0}
 .provider h3{font-size:14px;margin:0 0 9px}.status-line{display:flex;align-items:flex-start;gap:9px;font-size:13px;font-weight:750}
 .status-line:before{content:"";width:9px;height:9px;border-radius:50%;background:#9a7588;flex:none;margin-top:4px}
@@ -75,39 +78,27 @@ footer{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;color:
   </div>
 </section>
 <section class="panel">
-  <h2>Live data configuration</h2>
+  <h2>Choose a stop · departures are filtered to this stop</h2>
   <div class="controls">
-    <div class="stop-search-wrap"><input id="stop-search" type="text" aria-label="Search bus stop by name" placeholder="Search stop name…" autocomplete="off"><div id="stop-suggestions" class="suggestions" hidden></div><input id="stop-id" type="hidden" value="NSR:StopPlace:4000"></div>
+    <div class="stop-search-wrap"><input id="stop-search" type="text" aria-label="Search and select a stop" placeholder="Search a stop and select it…" autocomplete="off"><div id="stop-suggestions" class="suggestions" hidden></div><input id="stop-id" type="hidden" value="NSR:StopPlace:4000"></div>
     <label>Calls <input id="departure-limit" type="number" min="1" max="50" value="20"></label>
-    <button id="refresh" type="button">Refresh Entur</button>
+    <button id="refresh" type="button">Refresh departures</button>
     <label class="check"><input id="auto-refresh" type="checkbox" checked> Auto-refresh · 30 sec</label>
     <label class="file-label" for="file">Load snapshot JSON</label><input id="file" type="file" accept=".json,application/json">
   </div>
+  <div class="config-help">Type a stop name and select a result. The departure board always stays limited to that stop.</div>
+  <div class="tracking-action"><div><h3>Global vehicle tracking</h3><p>Normally, only vehicles serving the selected stop are shown. This is the one global override: it tracks all available buses, trains, metro, trams and boats across the Oslo region. The departure board still stays on your selected stop.</p><div id="tracking-status" class="status-detail" aria-live="polite">Selected-stop tracking is active. Choose a stop above to change the board.</div></div><button id="track-everything" type="button" title="Starts all Ruter bus-line subscriptions and Entur metro, train, tram and boat feeds, then shows every vehicle with GPS data on the map.">Track everything · all Oslo</button></div>
   <div class="providers">
     <div class="provider">
-      <h3>Ruter · Live tracking controls</h3>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button id="ruter-probe" type="button" title="Connects to Ruter and subscribes to bus vehicle positions across all lines.">Connect Ruter buses · all lines</button> <button id="ruter-all-map" type="button" title="Shows every bus, train, tram, metro or boat currently available with GPS coordinates.">Map: all GPS vehicles</button></div>
-    </div>
-    <div class="provider">
-      <h3>Track one bus route</h3>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <input id="route-number" type="text" inputmode="numeric" maxlength="6" placeholder="e.g. 83" aria-label="Bus route number" style="width:110px">
-        <button id="route-track" type="button" title="Tracks the entered bus route and shows only matching vehicles with GPS positions on the map.">Track route · map</button>
-        <button id="track-all" type="button" title="Connects all Ruter bus lines and Entur metro, train, tram and boat position feeds; the map shows all vehicles with GPS positions.">Track all · buses + rail</button>
-        <button id="route-clear" type="button" title="Removes the route filter and returns the map to all available GPS vehicles.">Show all</button>
-      </div>
-      <div id="route-filter-status" class="status-detail" aria-live="polite"></div>
-    </div>
-    <div class="provider">
       <h3>Entur · Public APIs</h3>
-      <div id="entur-status" class="status-line working"><div><span class="status-label">Connecting</span><span class="status-detail">Journey Planner + VYG/VYX vehicle positions</span></div></div>
+      <div id="entur-status" class="status-line working"><div><span class="status-label">Connecting</span><span class="status-detail">Departures + train vehicle positions</span></div></div>
     </div>
     <div class="provider">
-      <h3>Ruter · App GraphQL API</h3>
-      <div id="ruter-status" class="status-line"><div><span class="status-label">Not tested</span><span class="status-detail">Anonymous token + live departuresByLine / vehicleProgress subscriptions</span></div></div>
+      <h3>Ruter · Live vehicle API</h3>
+      <div id="ruter-status" class="status-line"><div><span class="status-label">Not connected</span><span class="status-detail">Connects for the selected stop; global tracking subscribes to all lines</span></div></div>
       <details>
         <summary>Detailed Ruter diagnostics</summary>
-        <div id="ruter-details">Ruter probe is manual. No account credentials are used; the anonymous token is kept in memory and never displayed.</div>
+        <div id="ruter-details">Ruter connects automatically for the selected stop. The global tracking button subscribes to all bus lines. No account credentials are used.</div>
         <details id="ruter-debug"><summary>WebSocket diagnostics · raw messages</summary><pre id="ruter-raw">No WebSocket messages captured yet.</pre></details>
       </details>
     </div>
