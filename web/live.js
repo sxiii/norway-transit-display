@@ -92,7 +92,9 @@ function renderBoard() {
   $("vehicle-count").textContent = state.vehicles.length;
   $("matched-count").textContent = matched;
   if (!calls.length) {
-    $("rows").innerHTML = '<div class="empty"><strong>No departures loaded</strong>Check the stop ID and Entur connection.</div>';
+    $("rows").innerHTML = state.selectedRouteFilter
+      ? '<div class="empty"><strong>No route '+esc(state.selectedRouteFilter)+' departures at this stop</strong>Route tracking can still continue across all stops served by the line.</div>'
+      : '<div class="empty"><strong>No departures loaded</strong>Check the stop ID and Entur connection.</div>';
     return;
   }
   const sorted = [...calls].sort((a,b) => new Date(a.expectedDepartureTime || a.aimedDepartureTime || 0) - new Date(b.expectedDepartureTime || b.aimedDepartureTime || 0));
@@ -530,7 +532,7 @@ document.addEventListener("fullscreenchange",()=>{$("map-fullscreen").textConten
 
 setupStopSearch();
 $("refresh").addEventListener("click", refreshEntur);
-$("ruter-probe").addEventListener("click", () => { state.selectedRouteFilter=""; probeRuter(); });
+$("ruter-probe").addEventListener("click", () => { state.selectedRouteFilter=""; renderBoard(); probeRuter(); });
 $("route-track").addEventListener("click", () => {
   const route=$("route-number").value.trim();
   if (!/^\d+[A-Za-z]?$/.test(route)) {
@@ -538,6 +540,7 @@ $("route-track").addEventListener("click", () => {
     return;
   }
   state.selectedRouteFilter=route;
+  renderBoard();
   $("route-filter-status").textContent="Connecting subscriptions for route "+route+"…";
   showAllSyncedBuses();
   probeRuter();
@@ -547,6 +550,7 @@ $("route-number").addEventListener("keydown", event => {
 });
 $("route-clear").addEventListener("click", () => {
   state.selectedRouteFilter="";
+  renderBoard();
   $("route-number").value="";
   $("route-filter-status").textContent="Route filter cleared. Reconnecting to all currently available lines…";
   probeRuter();
