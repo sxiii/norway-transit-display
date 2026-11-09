@@ -511,7 +511,8 @@ $("route-track").addEventListener("click", () => {
   }
   state.selectedRouteFilter=route;
   $("route-filter-status").textContent="Connecting subscriptions for route "+route+"…";
-  probeRuter().then?.(()=>{});
+  showAllSyncedBuses();
+  probeRuter();
 });
 $("route-number").addEventListener("keydown", event => {
   if (event.key === "Enter") $("route-track").click();
