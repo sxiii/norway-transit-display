@@ -16,7 +16,7 @@ h1{font-size:clamp(32px,5vw,60px);line-height:1;margin:10px 0 0;letter-spacing:-
 .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:22px 0}
 .stat{background:#21121d;border:1px solid #4a2b40;border-radius:14px;padding:15px 18px}.stat strong{display:block;font-size:clamp(24px,3vw,34px);font-variant-numeric:tabular-nums}.stat span{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#c9a8ba;font-weight:700}
 .panel{background:#1a0e17;border:1px solid #543149;border-radius:16px;padding:16px;margin:16px 0}
-.panel h2{font-size:14px;text-transform:uppercase;letter-spacing:.12em;color:#e3bfd0;margin:0 0 13px}
+.panel h2{font-size:14px;text-transform:uppercase;letter-spacing:.12em;color:#e3bfd0;margin:0 0 13px}.diagnostics-panel>summary{cursor:pointer;color:#e3bfd0;font-size:14px;font-weight:800;text-transform:uppercase;letter-spacing:.12em}.diagnostics-panel[open]>summary{margin-bottom:13px}
 .controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 input[type=text],input[type=number]{background:#120a10;color:#fff3f8;border:1px solid #684057;border-radius:9px;padding:10px 12px;font:inherit;min-width:0}
 #stop-id{flex:1;min-width:260px}#departure-limit{width:82px}
@@ -83,8 +83,19 @@ footer{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;color:
     <label class="file-label" for="file">Load snapshot JSON</label><input id="file" type="file" accept=".json,application/json">
   </div>
   <div class="providers">
-    <div class="provider"><h3>Entur · Public APIs</h3><div id="entur-status" class="status-line working"><div><span class="status-label">Connecting</span><span class="status-detail">Journey Planner + VYG/VYX vehicle positions</span></div></div></div>
-    <div class="provider"><h3>Ruter · App GraphQL API</h3><div id="ruter-status" class="status-line"><div><span class="status-label">Not tested</span><span class="status-detail">Anonymous token + live departuresByLine / vehicleProgress subscriptions</span></div></div><div id="ruter-details">Ruter probe is manual. No account credentials are used; the anonymous token is kept in memory and never displayed.</div><details id="ruter-debug"><summary>WebSocket diagnostics · raw messages</summary><pre id="ruter-raw">No WebSocket messages captured yet.</pre></details><div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button id="ruter-probe" type="button">Connect Ruter live data · all lines</button> <button id="ruter-all-map" type="button">Open map with synced buses</button></div>
+    <div class="provider">
+      <h3>API connection diagnostics</h3>
+      <div style="display:grid;gap:12px">
+        <div><strong style="display:block;font-size:12px;margin-bottom:7px">Entur · Public APIs</strong><div id="entur-status" class="status-line working"><div><span class="status-label">Connecting</span><span class="status-detail">Journey Planner + VYG/VYX vehicle positions</span></div></div></div>
+        <div><strong style="display:block;font-size:12px;margin-bottom:7px">Ruter · App GraphQL API</strong><div id="ruter-status" class="status-line"><div><span class="status-label">Not tested</span><span class="status-detail">Anonymous token + live departuresByLine / vehicleProgress subscriptions</span></div></div>
+          <div id="ruter-details">Ruter probe is manual. No account credentials are used; the anonymous token is kept in memory and never displayed.</div>
+          <details id="ruter-debug"><summary>WebSocket diagnostics · raw messages</summary><pre id="ruter-raw">No WebSocket messages captured yet.</pre></details>
+        </div>
+      </div>
+    </div>
+    <div class="provider">
+      <h3>Ruter · Live tracking controls</h3>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button id="ruter-probe" type="button">Connect Ruter live data · all lines</button> <button id="ruter-all-map" type="button">Open map</button></div>
       <div style="margin-top:14px;padding-top:12px;border-top:1px solid #523047">
         <label for="route-number" style="display:block;color:#d1a9bd;font-size:13px;font-weight:700;margin-bottom:7px">Track one bus route</label>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -94,7 +105,8 @@ footer{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;color:
           <button id="route-clear" type="button">Clear filter</button>
         </div>
         <div id="route-filter-status" class="status-detail" aria-live="polite">Track route follows every stop served by a bus line. Track all adds live trains, trams and boats across the Oslo region. Colors: <span style="color:#e30613">bus red</span> · <span style="color:#8fdcff">tram light blue</span> · <span style="color:#35c46a">train green</span> · <span style="color:#174f9b">boat dark blue</span>.</div>
-      </div></div>
+      </div>
+    </div>
   </div>
 </section>
 <section class="board">
@@ -102,7 +114,7 @@ footer{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;color:
   <div id="rows"><div class="empty"><strong>Connecting to Entur</strong>Departure data will appear here when the first request succeeds.</div></div>
 </section>
 <section id="map-panel" class="panel map-panel" hidden><div class="map-heading"><div><h2 id="map-title">Live bus map</h2><div id="map-subtitle" class="map-subtitle">Waiting for vehicle position</div></div><div class="map-actions"><button id="map-center" type="button">Recenter</button><button id="map-fullscreen" type="button">Fullscreen</button><button id="map-close" type="button">Close</button></div></div><div id="vehicle-map" role="img" aria-label="Live bus location map"></div></section>
-<section class="panel"><h2>Diagnostics</h2><div id="log" class="log"></div></section>
+<details class="panel diagnostics-panel"><summary>Diagnostics · activity log</summary><div id="log" class="log"></div></details>
 <footer><span>Entur data: Journey Planner + Vehicle Positions · Ruter: experimental app backend</span><span id="updated">Waiting for first update</span></footer>
 </main>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
