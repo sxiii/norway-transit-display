@@ -12,7 +12,7 @@ const CONFIG = {
 };
 
 const $ = (id) => document.getElementById(id);
-const state = { map: null, mapMarker: null, allBusMarkers: new Map(), allBusMarkersFitted: false, mapMode: "single", selectedMapJourney: null, selectedRouteFilter: "", trackAllMode: false, searchTimer: null, searchAbort: null, timer: null, busy: false, departures: [], vehicles: [], lastUpdated: null, stopName: null, stopType: "", stopTransportModes: [], ruterSocket: null, ruterAutoStarted: false, ruterProgress: new Map(), extraModeProgress: new Map(), extraModeSocket: null, allModeMarkers: new Map(), ruterRouteDepartures: new Map(), ruterJourneyRoutes: new Map(), ruterLineSubscriptions: new Set(), ruterJourneySubscriptions: new Set() };
+const state = { map: null, mapMarker: null, allBusMarkers: new Map(), allBusMarkersFitted: false, mapMode: "single", selectedMapJourney: null, trackAllMode: false, searchTimer: null, searchAbort: null, timer: null, busy: false, departures: [], vehicles: [], lastUpdated: null, stopName: null, stopType: "", stopTransportModes: [], ruterSocket: null, ruterAutoStarted: false, ruterProgress: new Map(), extraModeProgress: new Map(), extraModeSocket: null, allModeMarkers: new Map(), ruterRouteDepartures: new Map(), ruterJourneyRoutes: new Map(), ruterLineSubscriptions: new Set(), ruterJourneySubscriptions: new Set() };
 
 function setStatus(id, label, kind = "neutral", detail = "") {
   const node = $(id);
@@ -81,31 +81,14 @@ function ruterVehicleFor(journeyId) {
   };
 }
 function renderBoard() {
-  const allCalls = (state.selectedRouteFilter || state.trackAllMode)
-    ? (() => {
-        const routeCalls = new Map([...state.ruterRouteDepartures.entries()]
-          .filter(([journeyId]) => state.ruterProgress.has(journeyId)));
-        for (const [journeyId, progress] of state.ruterProgress) {
-          if (!routeCalls.has(journeyId)) routeCalls.set(journeyId, {
-            serviceJourney:{id:journeyId, journeyPattern:{line:{publicCode:state.ruterJourneyRoutes.get(journeyId) || state.selectedRouteFilter}}},
-            destinationDisplay:{frontText:"Live bus · route "+state.selectedRouteFilter},
-            quay:{id:progress.quayId || "", name:progress.quayId || "—"},
-            realtime:true
-          });
-        }
-        return [...routeCalls.values()];
-      })()
-    : state.departures;
-  const calls = state.selectedRouteFilter
-    ? allCalls.filter(call => String(call.serviceJourney?.journeyPattern?.line?.publicCode || call.serviceJourney?.journeyPattern?.line?.name || "").trim().toLowerCase() === state.selectedRouteFilter.toLowerCase())
-    : allCalls;
+  // The departure board is always scoped to the selected stop.
+  // Global vehicle tracking must never create synthetic departure rows.
+  const calls = state.departures;
   const vehiclesByJourney = new Map();
   for (const v of state.vehicles) if (v.journeyId) {
     const list = vehiclesByJourney.get(v.journeyId) || [];
     list.push(v); vehiclesByJourney.set(v.journeyId, list);
   }
-  // Entur's live mode subscriptions are stored separately from the initial
-  // vehicle query. Join them to departures by the Transmodel serviceJourney ID.
   for (const [key, v] of state.extraModeProgress) {
     const journeyId = v.serviceJourney?.id;
     if (!journeyId || !v.location) continue;
@@ -113,16 +96,20 @@ function renderBoard() {
     list.push({...v, source:"Entur", vehicleId:v.vehicleId || v.vehicleRef || key, journeyId});
     vehiclesByJourney.set(journeyId, list);
   }
-  const matched = calls.reduce((n, c) => n + (vehiclesByJourney.has(c.serviceJourney?.id) || !!ruterVehicleFor(c.serviceJourney?.id) ? 1 : 0), 0);
+  const matched = calls.reduce((n, call) => {
+    const journeyId=call.serviceJourney?.id;
+    return n + (journeyId && (vehiclesByJourney.has(journeyId) || !!ruterVehicleFor(journeyId)) ? 1 : 0);
+  }, 0);
+  const gpsCount = state.vehicles.filter(v=>Number.isFinite(Number(v.location?.latitude))&&Number.isFinite(Number(v.location?.longitude))).length
+    + [...state.extraModeProgress.values()].filter(v=>Number.isFinite(Number(v.location?.latitude))&&Number.isFinite(Number(v.location?.longitude))).length
+    + [...state.ruterProgress.values()].filter(v=>Number.isFinite(Number(v.latitude))&&Number.isFinite(Number(v.longitude))).length;
   $("departure-count").textContent = calls.length;
-  $("vehicle-count").textContent = state.vehicles.length + state.extraModeProgress.size;
+  $("vehicle-count").textContent = gpsCount;
   $("matched-count").textContent = matched;
   if (!calls.length) {
-    $("rows").innerHTML = state.selectedRouteFilter
-      ? '<div class="empty"><strong>No live route '+esc(state.selectedRouteFilter)+' buses received yet</strong>Waiting for vehicle positions from the route-wide subscriptions.</div>'
-      : state.trackAllMode
-        ? '<div class="empty"><strong>Waiting for live buses</strong>All Ruter bus lines are being subscribed across their stops. Rows will appear as vehicle positions arrive.</div>'
-        : '<div class="empty"><strong>No departures loaded</strong>Check the stop ID and Entur connection.</div>';
+    $("rows").innerHTML = '<div class="empty"><strong>No departures for this stop</strong>Try another stop or refresh the departure data.</div>';
+    $("stop-name").textContent = state.stopName || $("stop-id").value.trim();
+    renderStopMetadata();
     return;
   }
   const sorted = [...calls].sort((a,b) => new Date(a.expectedDepartureTime || a.aimedDepartureTime || 0) - new Date(b.expectedDepartureTime || b.aimedDepartureTime || 0));
@@ -142,15 +129,17 @@ function renderBoard() {
     const destination = call.destinationDisplay?.frontText || "Destination unavailable";
     const route = call.serviceJourney?.journeyPattern?.line?.publicCode || call.serviceJourney?.journeyPattern?.line?.name || "";
     const quay = call.quay?.name || call.quay?.id || "—";
-    const vehicleLabel = vehicle?.vehicleId || (vehicle?.source === "Ruter" ? "Ruter live" : vehicle ? "Tracked" : "Not matched");
-    const coords = vehicle?.location?.latitude != null ? vehicle.location.latitude.toFixed(4) + ", " + vehicle.location.longitude.toFixed(4) : "";
-    const routeStyle=transportModeStyle("",route);
+    const vehicleLabel = vehicle?.vehicleId || (vehicle?.source === "Ruter" ? "Ruter live" : vehicle ? (vehicle.mode || vehicle.codespace || "Tracked") : "Not matched");
+    const location = vehicle?.location;
+    const hasCoords = location && Number.isFinite(Number(location.latitude)) && Number.isFinite(Number(location.longitude));
+    const coords = hasCoords ? Number(location.latitude).toFixed(4) + ", " + Number(location.longitude).toFixed(4) : "";
+    const routeStyle=transportModeStyle(vehicle?.mode || "",route);
     return `<article class="departure">
       <div class="time">${esc(time)}<span class="sub">${call.realtime ? "Expected" : "Scheduled"}</span></div>
-      <div class="destination">${route ? `<span class="route-badge" style="background:${routeStyle.color}">${routeStyle.icon} ${esc(route)}</span>` : ""}${esc(destination)}<span class="sub">${vehicle ? esc(vehicle.mode || vehicle.codespace) : " "}</span></div>
+      <div class="destination">${route ? `<span class="route-badge" style="background:${routeStyle.color}">${routeStyle.icon} ${esc(route)}</span>` : ""}${esc(destination)}<span class="sub">${vehicle ? esc(vehicle.mode || vehicle.codespace || vehicle.source || "") : " "}</span></div>
       <div class="platform quay">${esc(quay)}</div>
-      <div class="status ${delayClass}">${esc(delayText)}<span class="sub">${vehicle ? "Vehicle position available" : "No position match"}</span></div>
-      <div class="vehicle"><span class="pill" title="${esc(vehicleLabel)}">${esc(vehicleLabel)}</span><span class="sub">${esc(coords)}</span>${vehicle?.source === "Ruter" && vehicle.location?.latitude != null ? `<button type="button" data-map-journey="${esc(journeyId)}">Show map</button>` : ""}</div>
+      <div class="status ${delayClass}">${esc(delayText)}<span class="sub">${hasCoords ? "GPS position available" : "No GPS position match"}</span></div>
+      <div class="vehicle"><span class="pill" title="${esc(vehicleLabel)}">${esc(vehicleLabel)}</span><span class="sub">${esc(coords)}</span>${hasCoords && journeyId ? `<button type="button" data-map-journey="${esc(journeyId)}">Show map</button>` : ""}</div>
     </article>`;
   }).join("");
   $("rows").querySelectorAll("[data-map-journey]").forEach(button => button.addEventListener("click", () => showVehicleMap(button.dataset.mapJourney)));
@@ -172,7 +161,7 @@ function esc(value) {
   return String(value ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 }
 
-async function refreshEntur() {
+async function refreshEntur(refreshStopVehicleTracking = false) {
   if (state.busy) return;
   state.busy = true;
   setStatus("entur-status", "Connecting / refreshing", "working", "Entur HTTP GraphQL");
@@ -198,7 +187,7 @@ async function refreshEntur() {
     if(state.mapMode==="all")updateAllVehicleMarkers();
     setStatus("entur-status", "Connected", "ok", stop.name + " · " + state.departures.length + " departures · " + state.vehicles.length + " vehicles");
     log("Entur refreshed: " + state.departures.length + " departures, " + state.vehicles.length + " VYG/VYX vehicles.", "success");
-    if (!state.ruterAutoStarted) { state.ruterAutoStarted = true; probeRuter(); }
+    if (refreshStopVehicleTracking && !state.trackAllMode) probeRuter();
   } catch (error) {
     setStatus("entur-status", "Request failed", "bad", error.message);
     log("Entur failed: " + error.message, "error");
@@ -303,7 +292,7 @@ async function discoverAllRuterKeys() {
       }
       completed++;
       if (completed % 20 === 0) {
-        $("route-filter-status").textContent = "Discovering all Ruter bus lines: "+completed+"/"+linesTotal+" lines · "+keys.size+" subscriptions found…";
+        $("tracking-status").textContent = "Discovering all Ruter bus lines: "+completed+"/"+linesTotal+" lines · "+keys.size+" subscriptions found…";
       }
     }
   });
@@ -322,7 +311,7 @@ function connectEnturModeTracking() {
  const bounds={minLat:59.0,minLon:9.5,maxLat:60.5,maxLon:11.8};
  const pending=new Map();
  ws.onopen=()=>ws.send(JSON.stringify({type:"connection_init",payload:{"ET-Client-Name":CONFIG.enturClient}}));
- ws.onerror=()=>{log("Entur vehicle-position WebSocket network error.","error");$("route-filter-status").textContent="Entur metro/train/tram/boat stream failed. Check diagnostics; Ruter bus tracking can continue.";};
+ ws.onerror=()=>{log("Entur vehicle-position WebSocket network error.","error");$("tracking-status").textContent="Entur metro/train/tram/boat stream failed. Check diagnostics; Ruter bus tracking can continue.";};
  ws.onclose=e=>{if(state.extraModeSocket===ws){state.extraModeSocket=null;log("Entur vehicle-position stream closed ("+e.code+").","error");}};
  ws.onmessage=event=>{
   let msg;try{msg=JSON.parse(event.data);}catch{return;}
@@ -339,7 +328,7 @@ function connectEnturModeTracking() {
     pending.set(id,mode);
     ws.send(JSON.stringify({id,type:"subscribe",payload:{operationName:"ModeVehicles",query,variables:{mode,boundingBox:bounds}}}));
    });
-   $("route-filter-status").textContent="Ruter buses plus Entur live T-Bane, trains, trams and boats in the Oslo region.";
+   $("tracking-status").textContent="Ruter buses plus Entur live T-Bane, trains, trams and boats in the Oslo region.";
    return;
   }
   if(msg.type==="next"){
@@ -376,9 +365,7 @@ async function probeRuter() {
     // of the currently selected departure-board stop.
     const ruterKeys = state.trackAllMode
       ? await discoverAllRuterKeys()
-      : state.selectedRouteFilter
-        ? await discoverRouteRuterKeys(state.selectedRouteFilter)
-        : [...new Map(state.departures.flatMap(call => {
+      : [...new Map(state.departures.flatMap(call => {
             const quayId = call.quay?.id;
             const lineId = call.serviceJourney?.journeyPattern?.line?.id;
             const frontText = call.destinationDisplay?.frontText;
@@ -387,9 +374,9 @@ async function probeRuter() {
             return [[id, {id, quayId, lineId, frontText, route:call.serviceJourney?.journeyPattern?.line?.publicCode || ""}]];
           })).values()];
     if (state.trackAllMode) {
-      $("route-filter-status").textContent = "Found "+ruterKeys.length+" stop/destination subscriptions across the Ruter bus network; waiting for live vehicle positions.";
-    } else if (state.selectedRouteFilter) {
-      $("route-filter-status").textContent = "Found "+ruterKeys.length+" stop/destination subscriptions for route "+state.selectedRouteFilter+"; waiting for live vehicle positions.";
+      $("tracking-status").textContent = "Found "+ruterKeys.length+" stop/destination subscriptions across the Ruter bus network; waiting for live vehicle positions.";
+    } else {
+      $("tracking-status").textContent = "Following departures at "+(state.stopName || "the selected stop")+" · "+ruterKeys.length+" bus subscriptions found.";
     }
     if (!ruterKeys.length) {
       throw new Error("No Ruter-operated departures were found at the selected stop. Use “Connect Ruter live data · all lines” or select a stop served by Ruter buses.");
@@ -563,7 +550,7 @@ async function probeRuter() {
     };
   } catch (error) {
     $("ruter-details").textContent = error.message;
-    if (state.selectedRouteFilter) $("route-filter-status").textContent = "Route "+state.selectedRouteFilter+" tracking failed: "+error.message;
+    $("tracking-status").textContent = "Vehicle tracking could not start: "+error.message;
     setStatus("ruter-status", "Probe failed", "bad", error.message);
     log("Ruter probe failed: "+error.message, "error");
   }
@@ -637,12 +624,12 @@ function clearVehicleMarkers(){
 function updateAllVehicleMarkers() {
  initVehicleMap();if(!state.map)return;
  const bounds=[];let busCount=0,enturCount=0;
- const wanted=String(state.selectedRouteFilter||"").trim().toLowerCase();
- const matchesRoute=route=>!wanted||String(route||"").trim().toLowerCase()===wanted;
+ const selectedJourneys=new Set(state.departures.map(call=>call.serviceJourney?.id).filter(Boolean));
+ const inScope=journeyId=>state.trackAllMode || (journeyId && selectedJourneys.has(journeyId));
  // Ruter bus vehicle-progress positions.
  for(const [journeyId,progress] of state.ruterProgress){
   const route=busRouteNumber(journeyId);
-  if(!matchesRoute(route))continue;
+  if(!inScope(journeyId))continue;
   const lat=Number(progress.latitude),lon=Number(progress.longitude);
   if(!Number.isFinite(lat)||!Number.isFinite(lon))continue;
   const point=[lat,lon],label=routeLabelForJourney(journeyId),vin=progress.id||"Ruter bus";
@@ -681,39 +668,51 @@ function updateAllVehicleMarkers() {
  }
  // Remove stale/out-of-filter Entur markers so the map always reflects the selected scope.
  for(const [key,marker] of state.allModeMarkers){if(!activeKeys.has(key)){state.map.removeLayer(marker);state.allModeMarkers.delete(key);}}
- const scope=wanted?"Route "+state.selectedRouteFilter+" · ":"";
- $("map-subtitle").textContent=scope+busCount+" buses · "+enturCount+" Entur vehicles with GPS coordinates";
+ const scope=state.trackAllMode?"All Oslo · ":"Selected stop · ";
+ $("map-subtitle").textContent=scope+busCount+" Ruter buses · "+enturCount+" Entur vehicles with GPS coordinates";
  if(bounds.length&&!state.allBusMarkersFitted){state.map.fitBounds(bounds,{padding:[28,28],maxZoom:15});state.allBusMarkersFitted=true;}
  else if(!bounds.length)$("map-subtitle").textContent+=" · No matching live positions yet";
  setTimeout(()=>state.map?.invalidateSize(),0);
 }
-function updateVehicleMap(progress) {
+function updateVehicleMap(vehicle, journeyId) {
  if(state.mapMode==="all"){updateAllVehicleMarkers();return;}
- const lat=Number(progress.latitude),lon=Number(progress.longitude);
+ const lat=Number(vehicle?.location?.latitude),lon=Number(vehicle?.location?.longitude);
  if(!Number.isFinite(lat)||!Number.isFinite(lon))return;
  initVehicleMap();if(!state.map)return;
+ const call=state.departures.find(item=>item.serviceJourney?.id===journeyId);
+ const route=call?.serviceJourney?.journeyPattern?.line?.publicCode||call?.serviceJourney?.journeyPattern?.line?.name||"";
+ const style=transportModeStyle(vehicle?.mode||vehicle?.codespace||"",route);
  const point=[lat,lon];
- const route=busRouteNumber(state.selectedMapJourney);
- if(!state.mapMarker)state.mapMarker=L.marker(point,{icon:busNumberIcon(route)}).addTo(state.map);
- else {state.mapMarker.setLatLng(point);state.mapMarker.setIcon(busNumberIcon(route));}
- state.mapMarker.bindPopup("<b>"+esc(route||"Ruter bus")+"</b><br>"+esc(progress.id||"Ruter bus")+"<br>"+lat.toFixed(5)+", "+lon.toFixed(5));
+ if(!state.mapMarker)state.mapMarker=L.marker(point,{icon:transportModeIcon(vehicle?.mode||vehicle?.codespace||"",route)}).addTo(state.map);
+ else {state.mapMarker.setLatLng(point);state.mapMarker.setIcon(transportModeIcon(vehicle?.mode||vehicle?.codespace||"",route));}
+ state.mapMarker.bindPopup("<b>"+esc(route||style.label)+" · "+esc(style.label)+"</b><br>"+esc(vehicle.vehicleId||vehicle.vehicleRef||"Vehicle")+"<br>"+lat.toFixed(5)+", "+lon.toFixed(5));
  state.map.panTo(point,{animate:false});
- $("map-subtitle").textContent=(progress.id||"Ruter bus")+" · "+lat.toFixed(5)+", "+lon.toFixed(5)+" · "+(progress.status||"Live");
+ $("map-subtitle").textContent=(vehicle.vehicleId||vehicle.vehicleRef||style.label)+" · "+lat.toFixed(5)+", "+lon.toFixed(5)+" · GPS position";
  setTimeout(()=>state.map?.invalidateSize(),0);
 }
 function showAllSyncedBuses(){
  clearVehicleMarkers();state.mapMode="all";state.selectedMapJourney=null;
  $("map-panel").hidden=false;
- $("map-title").textContent=state.selectedRouteFilter
-  ? "ROUTE "+state.selectedRouteFilter+" · LIVE VEHICLES" : "ALL LIVE VEHICLES · BUSES, TRAINS, TRAMS & BOATS";
+ $("map-title").textContent=state.trackAllMode ? "ALL LIVE VEHICLES · ALL OPERATORS" : "VEHICLES SERVING SELECTED STOP";
  updateAllVehicleMarkers();setTimeout(()=>state.map?.invalidateSize(),50);
  $("map-panel").scrollIntoView({behavior:"smooth",block:"nearest"});
 }
 function showVehicleMap(journeyId){
- const p=state.ruterProgress.get(journeyId);if(!p)return;
+ let vehicle=state.vehicles.find(item=>item.journeyId===journeyId)||null;
+ if(!vehicle){
+  const entur=[...state.extraModeProgress.values()].find(item=>item.serviceJourney?.id===journeyId);
+  if(entur)vehicle={...entur,source:"Entur",location:entur.location};
+ }
+ if(!vehicle)vehicle=ruterVehicleFor(journeyId);
+ if(!vehicle?.location)return;
+ const lat=Number(vehicle.location.latitude),lon=Number(vehicle.location.longitude);
+ if(!Number.isFinite(lat)||!Number.isFinite(lon))return;
  clearVehicleMarkers();state.mapMode="single";state.selectedMapJourney=journeyId;$("map-panel").hidden=false;
- $("map-title").textContent=routeLabelForJourney(journeyId)+" · LIVE BUS";
- updateVehicleMap(p);setTimeout(()=>state.map?.invalidateSize(),50);
+ const call=state.departures.find(item=>item.serviceJourney?.id===journeyId);
+ const route=call?.serviceJourney?.journeyPattern?.line?.publicCode||call?.serviceJourney?.journeyPattern?.line?.name||"";
+ const style=transportModeStyle(vehicle.mode||vehicle.codespace||"",route);
+ $("map-title").textContent=(route||style.label)+" · SELECTED STOP VEHICLE";
+ updateVehicleMap(vehicle,journeyId);setTimeout(()=>state.map?.invalidateSize(),50);
  $("map-panel").scrollIntoView({behavior:"smooth",block:"nearest"});
 }
 async function searchStops(query){
@@ -729,60 +728,35 @@ async function searchStops(query){
   stops.slice(0,8).forEach(stop=>{
    const b=document.createElement("button");b.type="button";b.className="suggestion";
    b.innerHTML=esc(stop.name)+"<small>"+esc([stop.area,stop.id].filter(Boolean).join(" · "))+"</small>";
-   b.addEventListener("click",()=>{$("stop-id").value=stop.id;$("stop-search").value=stop.name;box.hidden=true;state.ruterProgress.clear();state.selectedMapJourney=null;$("map-panel").hidden=true;refreshEntur();if(state.ruterSocket)probeRuter();});
+   b.addEventListener("click",()=>{$("stop-id").value=stop.id;$("stop-search").value=stop.name;box.hidden=true;state.trackAllMode=false;if(state.extraModeSocket){try{state.extraModeSocket.close(1000,"Selected-stop scope");}catch{}state.extraModeSocket=null;}state.extraModeProgress.clear();state.ruterProgress.clear();state.selectedMapJourney=null;if(state.mapMode==="all"){clearVehicleMarkers();state.mapMode="single";}$("map-panel").hidden=true;$("tracking-status").textContent="Loading departures and vehicle positions for "+stop.name+"…";refreshEntur(true);});
    box.append(b);
   });box.hidden=false;
  }catch(e){if(e.name!=="AbortError")log("Stop search failed: "+e.message,"error");}
 }
 function setupStopSearch(){
  $("stop-search").value="Jernbanetorget";
+ $("stop-search").placeholder="Search a stop and select it to filter departures";
  $("stop-search").addEventListener("input",()=>{const q=$("stop-search").value.trim();clearTimeout(state.searchTimer);if(q.length<2){$("stop-suggestions").hidden=true;return;}state.searchTimer=setTimeout(()=>searchStops(q),180);});
  document.addEventListener("click",e=>{if(!e.target.closest(".stop-search-wrap"))$("stop-suggestions").hidden=true;});
 }
-$("map-center").addEventListener("click",()=>{if(state.mapMode==="all"){const bounds=[...state.allBusMarkers.values(),...state.allModeMarkers.values()].map(marker=>marker.getLatLng());if(bounds.length)state.map.fitBounds(bounds,{padding:[28,28],maxZoom:15});}else{const p=state.selectedMapJourney&&state.ruterProgress.get(state.selectedMapJourney);if(p)updateVehicleMap(p);}});
-$("ruter-all-map").addEventListener("click",showAllSyncedBuses);
+$("map-center").addEventListener("click",()=>{if(state.mapMode==="all"){const bounds=[...state.allBusMarkers.values(),...state.allModeMarkers.values()].map(marker=>marker.getLatLng());if(bounds.length)state.map.fitBounds(bounds,{padding:[28,28],maxZoom:15});}else if(state.selectedMapJourney){showVehicleMap(state.selectedMapJourney);}});
+$("map-close").addEventListener("click"
 $("map-close").addEventListener("click",()=>{$("map-panel").hidden=true;});
 $("map-fullscreen").addEventListener("click",async()=>{try{if(!document.fullscreenElement)await $("map-panel").requestFullscreen();else await document.exitFullscreen();}catch(e){log("Fullscreen unavailable: "+e.message,"error");}});
 document.addEventListener("fullscreenchange",()=>{$("map-fullscreen").textContent=document.fullscreenElement?"Exit fullscreen":"Fullscreen";setTimeout(()=>state.map?.invalidateSize(),80);});
 
 setupStopSearch();
-$("refresh").addEventListener("click", refreshEntur);
-$("ruter-probe").addEventListener("click", () => { state.selectedRouteFilter=""; state.trackAllMode=false; renderBoard(); probeRuter(); });
-$("track-all").addEventListener("click", () => {
-  state.selectedRouteFilter="";
+$("refresh").addEventListener("click",()=>refreshEntur(true));
+$("track-everything").addEventListener("click", () => {
   state.trackAllMode=true;
-  $("route-number").value="";
-  renderBoard();
-  $("route-filter-status").textContent="Discovering all Ruter bus lines and their stops… this can take a little while.";
-  showAllSyncedBuses();
+  state.ruterProgress.clear();
+  state.extraModeProgress.clear();
+  $("tracking-status").textContent="Starting global tracking · discovering all Ruter bus lines and connecting Entur vehicle feeds…";
   connectEnturModeTracking();
-  probeRuter();
-});
-$("route-track").addEventListener("click", () => {
-  const route=$("route-number").value.trim();
-  if (!/^\d+[A-Za-z]?$/.test(route)) {
-    $("route-filter-status").textContent="Enter a route number, e.g. 83.";
-    return;
-  }
-  state.selectedRouteFilter=route;
-  state.trackAllMode=false;
-  renderBoard();
-  $("route-filter-status").textContent="Tracking route "+route+" · map shows only matching vehicles with GPS coordinates.";
   showAllSyncedBuses();
   probeRuter();
 });
-$("route-number").addEventListener("keydown", event => {
-  if (event.key === "Enter") $("route-track").click();
-});
-$("route-clear").addEventListener("click", () => {
-  state.selectedRouteFilter="";
-  state.trackAllMode=false;
-  renderBoard();
-  $("route-number").value="";
-  $("route-filter-status").textContent="Filter cleared · map shows all vehicles with GPS coordinates.";
-  probeRuter();
-  if (state.mapMode === "all") showAllSyncedBuses();
-});
+
 $("auto-refresh").addEventListener("change", () => {
   if (state.timer) clearInterval(state.timer);
   state.timer = $("auto-refresh").checked ? setInterval(refreshEntur, CONFIG.refreshMs) : null;
@@ -812,5 +786,5 @@ function tick() { $("clock").textContent = new Intl.DateTimeFormat(undefined,{ho
 tick(); setInterval(tick,1000);
 $("stop-id").value = CONFIG.defaultStop;
 log("Ready. Entur auto-refresh is enabled; Ruter is an explicit one-click probe.");
-refreshEntur();
+refreshEntur(true);
 state.timer = setInterval(refreshEntur, CONFIG.refreshMs);
