@@ -635,42 +635,55 @@ function clearVehicleMarkers(){
 }
 function updateAllVehicleMarkers() {
  initVehicleMap();if(!state.map)return;
- const bounds=[];let count=0;
+ const bounds=[];let busCount=0,enturCount=0;
+ const wanted=String(state.selectedRouteFilter||"").trim().toLowerCase();
+ const matchesRoute=route=>!wanted||String(route||"").trim().toLowerCase()===wanted;
+ // Ruter bus vehicle-progress positions.
  for(const [journeyId,progress] of state.ruterProgress){
-  if (state.selectedRouteFilter &&
-      String(busRouteNumber(journeyId)).trim().toLowerCase() !== state.selectedRouteFilter.toLowerCase()) continue;
+  const route=busRouteNumber(journeyId);
+  if(!matchesRoute(route))continue;
   const lat=Number(progress.latitude),lon=Number(progress.longitude);
   if(!Number.isFinite(lat)||!Number.isFinite(lon))continue;
   const point=[lat,lon],label=routeLabelForJourney(journeyId),vin=progress.id||"Ruter bus";
   let marker=state.allBusMarkers.get(journeyId);
-  if(!marker){
-   marker=L.marker(point,{icon:busNumberIcon(busRouteNumber(journeyId))}).addTo(state.map);
-   state.allBusMarkers.set(journeyId,marker);
-  } else {
-   marker.setLatLng(point);
-   marker.setIcon(busNumberIcon(busRouteNumber(journeyId)));
-  }
+  if(!marker){marker=L.marker(point,{icon:busNumberIcon(route)}).addTo(state.map);state.allBusMarkers.set(journeyId,marker);}
+  else{marker.setLatLng(point);marker.setIcon(busNumberIcon(route));}
   marker.bindPopup("<b>"+esc(label)+"</b><br>"+esc(vin)+"<br>"+lat.toFixed(5)+", "+lon.toFixed(5));
-  bounds.push(point);count++;
+  bounds.push(point);busCount++;
  }
- let extraCount=0;
- for(const [id,vehicle] of state.extraModeProgress){
+ // Entur positions from both the one-shot vehicle query and live mode subscriptions.
+ const enturVehicles=new Map();
+ for(const vehicle of state.vehicles){
+  const id=vehicle.vehicleId||vehicle.vehicleRef||vehicle.journeyId;
+  if(id)enturVehicles.set(String(id),vehicle);
+ }
+ for(const [key,vehicle] of state.extraModeProgress){
+  const id=vehicle.vehicleId||vehicle.vehicleRef||key;
+  enturVehicles.set(String(id),{...vehicle,mode:vehicle.mode||"RAIL"});
+ }
+ const activeKeys=new Set();
+ for(const [id,vehicle] of enturVehicles){
   const lat=Number(vehicle.location?.latitude),lon=Number(vehicle.location?.longitude);
   if(!Number.isFinite(lat)||!Number.isFinite(lon))continue;
-  const mode=vehicle.mode||"";
-  const route=vehicle.line?.publicCode||vehicle.line?.name||vehicle.lineName||"";
-  const style=transportModeStyle(mode,route);
-  const point=[lat,lon];
-  let marker=state.allModeMarkers.get(id);
-  if(!marker) { marker=L.marker(point,{icon:transportModeIcon(mode,route)}).addTo(state.map);state.allModeMarkers.set(id,marker); }
-  else { marker.setLatLng(point);marker.setIcon(transportModeIcon(mode,route)); }
-  marker.bindPopup("<b>"+esc(route)+" · "+esc(style.label)+"</b><br>"+esc(vehicle.vehicleId||"Vehicle")+
-    (vehicle.destinationName?"<br>To "+esc(vehicle.destinationName):"")+"<br>"+lat.toFixed(5)+", "+lon.toFixed(5));
-  bounds.push(point);extraCount++;
+  const journeyId=vehicle.journeyId||vehicle.serviceJourney?.id;
+  const call=state.departures.find(item=>item.serviceJourney?.id===journeyId);
+  const route=vehicle.line?.publicCode||vehicle.line?.name||call?.serviceJourney?.journeyPattern?.line?.publicCode||call?.serviceJourney?.journeyPattern?.line?.name||"";
+  if(!matchesRoute(route))continue;
+  const mode=vehicle.mode||"",style=transportModeStyle(mode,route),point=[lat,lon],key="entur:"+id;
+  activeKeys.add(key);
+  let marker=state.allModeMarkers.get(key);
+  if(!marker){marker=L.marker(point,{icon:transportModeIcon(mode,route)}).addTo(state.map);state.allModeMarkers.set(key,marker);}
+  else{marker.setLatLng(point);marker.setIcon(transportModeIcon(mode,route));}
+  marker.bindPopup("<b>"+esc(route||style.label)+" · "+esc(style.label)+"</b><br>"+esc(vehicle.vehicleId||vehicle.vehicleRef||"Vehicle")+
+   (vehicle.destinationName?"<br>To "+esc(vehicle.destinationName):"")+"<br>"+lat.toFixed(5)+", "+lon.toFixed(5));
+  bounds.push(point);enturCount++;
  }
- $("map-subtitle").textContent=(state.selectedRouteFilter ? "Route "+state.selectedRouteFilter+" · " : "")+
-  count+" buses · "+extraCount+" metro, trains, trams & boats with live positions · updates in real time";
+ // Remove stale/out-of-filter Entur markers so the map always reflects the selected scope.
+ for(const [key,marker] of state.allModeMarkers){if(!activeKeys.has(key)){state.map.removeLayer(marker);state.allModeMarkers.delete(key);}}
+ const scope=wanted?"Route "+state.selectedRouteFilter+" · ":"";
+ $("map-subtitle").textContent=scope+busCount+" buses · "+enturCount+" Entur vehicles with GPS coordinates";
  if(bounds.length&&!state.allBusMarkersFitted){state.map.fitBounds(bounds,{padding:[28,28],maxZoom:15});state.allBusMarkersFitted=true;}
+ else if(!bounds.length)$("map-subtitle").textContent+=" · No matching live positions yet";
  setTimeout(()=>state.map?.invalidateSize(),0);
 }
 function updateVehicleMap(progress) {
@@ -691,7 +704,7 @@ function showAllSyncedBuses(){
  clearVehicleMarkers();state.mapMode="all";state.selectedMapJourney=null;
  $("map-panel").hidden=false;
  $("map-title").textContent=state.selectedRouteFilter
-  ? "ROUTE "+state.selectedRouteFilter+" · LIVE BUSES" : "ALL LIVE VEHICLES · BUSES, TRAINS, TRAMS & BOATS";
+  ? "ROUTE "+state.selectedRouteFilter+" · LIVE VEHICLES" : "ALL LIVE VEHICLES · BUSES, TRAINS, TRAMS & BOATS";
  updateAllVehicleMarkers();setTimeout(()=>state.map?.invalidateSize(),50);
  $("map-panel").scrollIntoView({behavior:"smooth",block:"nearest"});
 }
@@ -725,7 +738,7 @@ function setupStopSearch(){
  $("stop-search").addEventListener("input",()=>{const q=$("stop-search").value.trim();clearTimeout(state.searchTimer);if(q.length<2){$("stop-suggestions").hidden=true;return;}state.searchTimer=setTimeout(()=>searchStops(q),180);});
  document.addEventListener("click",e=>{if(!e.target.closest(".stop-search-wrap"))$("stop-suggestions").hidden=true;});
 }
-$("map-center").addEventListener("click",()=>{if(state.mapMode==="all"){const bounds=[...state.allBusMarkers.values()].map(marker=>marker.getLatLng());if(bounds.length)state.map.fitBounds(bounds,{padding:[28,28],maxZoom:15});}else{const p=state.selectedMapJourney&&state.ruterProgress.get(state.selectedMapJourney);if(p)updateVehicleMap(p);}});
+$("map-center").addEventListener("click",()=>{if(state.mapMode==="all"){const bounds=[...state.allBusMarkers.values(),...state.allModeMarkers.values()].map(marker=>marker.getLatLng());if(bounds.length)state.map.fitBounds(bounds,{padding:[28,28],maxZoom:15});}else{const p=state.selectedMapJourney&&state.ruterProgress.get(state.selectedMapJourney);if(p)updateVehicleMap(p);}});
 $("ruter-all-map").addEventListener("click",showAllSyncedBuses);
 $("map-close").addEventListener("click",()=>{$("map-panel").hidden=true;});
 $("map-fullscreen").addEventListener("click",async()=>{try{if(!document.fullscreenElement)await $("map-panel").requestFullscreen();else await document.exitFullscreen();}catch(e){log("Fullscreen unavailable: "+e.message,"error");}});
@@ -753,7 +766,7 @@ $("route-track").addEventListener("click", () => {
   state.selectedRouteFilter=route;
   state.trackAllMode=false;
   renderBoard();
-  $("route-filter-status").textContent="Connecting subscriptions for route "+route+"…";
+  $("route-filter-status").textContent="Tracking route "+route+" · map shows only matching vehicles with GPS coordinates.";
   showAllSyncedBuses();
   probeRuter();
 });
@@ -765,7 +778,7 @@ $("route-clear").addEventListener("click", () => {
   state.trackAllMode=false;
   renderBoard();
   $("route-number").value="";
-  $("route-filter-status").textContent="Route filter cleared. Reconnecting to all currently available lines…";
+  $("route-filter-status").textContent="Filter cleared · map shows all vehicles with GPS coordinates.";
   probeRuter();
   if (state.mapMode === "all") showAllSyncedBuses();
 });
