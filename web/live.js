@@ -11,7 +11,7 @@ const CONFIG = {
 };
 
 const $ = (id) => document.getElementById(id);
-const state = { map: null, mapMarker: null, allBusMarkers: new Map(), allBusMarkersFitted: false, mapMode: "single", selectedMapJourney: null, selectedRouteFilter: "", searchTimer: null, searchAbort: null, timer: null, busy: false, departures: [], vehicles: [], lastUpdated: null, stopName: null, ruterSocket: null, ruterAutoStarted: false, ruterProgress: new Map(), ruterRouteDepartures: new Map(), ruterJourneyRoutes: new Map(), ruterLineSubscriptions: new Set(), ruterJourneySubscriptions: new Set() };
+const state = { map: null, mapMarker: null, allBusMarkers: new Map(), allBusMarkersFitted: false, mapMode: "single", selectedMapJourney: null, selectedRouteFilter: "", trackAllMode: false, searchTimer: null, searchAbort: null, timer: null, busy: false, departures: [], vehicles: [], lastUpdated: null, stopName: null, ruterSocket: null, ruterAutoStarted: false, ruterProgress: new Map(), ruterRouteDepartures: new Map(), ruterJourneyRoutes: new Map(), ruterLineSubscriptions: new Set(), ruterJourneySubscriptions: new Set() };
 
 function setStatus(id, label, kind = "neutral", detail = "") {
   const node = $(id);
@@ -80,7 +80,7 @@ function ruterVehicleFor(journeyId) {
   };
 }
 function renderBoard() {
-  const allCalls = state.selectedRouteFilter
+  const allCalls = (state.selectedRouteFilter || state.trackAllMode)
     ? (() => {
         const routeCalls = new Map([...state.ruterRouteDepartures.entries()]
           .filter(([journeyId]) => state.ruterProgress.has(journeyId)));
@@ -236,6 +236,55 @@ async function discoverRouteRuterKeys(route) {
   return [...keys.values()];
 }
 
+async function discoverAllRuterKeys() {
+  const lineData = await gql(CONFIG.transitDataUrl,
+    'query AllBusLines { lines(transportModes: ["bus"], first: 1000) { nodes { id publicCode name } } }',
+    enturHeaders
+  );
+  const lines = (lineData.lines?.nodes || []).filter(line => line.id?.startsWith("RUT:Line:"));
+  if (!lines.length) throw new Error("Entur returned no Ruter bus lines.");
+  const keys = new Map();
+  let completed = 0;
+  const workers = Array.from({length:5}, async () => {
+    while (true) {
+      const line = lines.shift();
+      if (!line) return;
+      const detail = await gql(CONFIG.transitDataUrl,
+        `query AllLineQuays { line(id: ${JSON.stringify(line.id)}) { id publicCode name quays(first: 1000) { nodes { id estimatedCalls(numberOfDepartures: 1000, whiteListed: { lines: [${JSON.stringify(line.id)}] }) { aimedDepartureTime expectedDepartureTime realtime destinationDisplay { frontText } quay { id name } serviceJourney { id } } } } } }`,
+        enturHeaders);
+      for (const quay of detail.line?.quays?.nodes || []) {
+        for (const call of quay.estimatedCalls || []) {
+          const frontText = call.destinationDisplay?.frontText;
+          if (!quay.id || !frontText) continue;
+          const id = [quay.id, line.id, frontText].join("|");
+          keys.set(id, {id, quayId:quay.id, lineId:line.id, frontText, route:String(line.publicCode || line.name || "")});
+          const journeyId = call.serviceJourney?.id;
+          if (journeyId) {
+            const existing = state.ruterRouteDepartures.get(journeyId);
+            const callTime = call.expectedDepartureTime || call.aimedDepartureTime || "";
+            if (!existing || (callTime && callTime < (existing.expectedDepartureTime || existing.aimedDepartureTime || "9999"))) {
+              state.ruterRouteDepartures.set(journeyId, {
+                serviceJourney:{id:journeyId, journeyPattern:{line:{publicCode:line.publicCode || line.name || "", name:line.name || ""}}},
+                destinationDisplay:{frontText}, quay:{id:quay.id, name:quay.name || quay.id},
+                expectedDepartureTime:call.expectedDepartureTime, aimedDepartureTime:call.aimedDepartureTime,
+                realtime:!!call.realtime
+              });
+            }
+          }
+        }
+      }
+      completed++;
+      if (completed % 20 === 0) {
+        $("route-filter-status").textContent = "Discovering all Ruter bus lines: "+completed+"/"+linesTotal+" lines · "+keys.size+" subscriptions found…";
+      }
+    }
+  });
+  const linesTotal = lines.length;
+  await Promise.all(workers);
+  if (!keys.size) throw new Error("Ruter bus lines were found, but no stop/destination subscriptions were returned.");
+  return [...keys.values()];
+}
+
 async function probeRuter() {
   closeRuterSocket();
   clearVehicleMarkers();
@@ -251,16 +300,18 @@ async function probeRuter() {
     // Ruter requires quayId|lineId|frontText. For a selected route, discover
     // every quay served by that line through Entur Transit Data, independent
     // of the currently selected departure-board stop.
-    const ruterKeys = state.selectedRouteFilter
-      ? await discoverRouteRuterKeys(state.selectedRouteFilter)
-      : [...new Map(state.departures.flatMap(call => {
-          const quayId = call.quay?.id;
-          const lineId = call.serviceJourney?.journeyPattern?.line?.id;
-          const frontText = call.destinationDisplay?.frontText;
-          if (!quayId || !lineId || !frontText || !lineId.startsWith("RUT:Line:")) return [];
-          const id = [quayId, lineId, frontText].join("|");
-          return [[id, {id, quayId, lineId, frontText, route:call.serviceJourney?.journeyPattern?.line?.publicCode || ""}]];
-        })).values()];
+    const ruterKeys = state.trackAllMode
+      ? await discoverAllRuterKeys()
+      : state.selectedRouteFilter
+        ? await discoverRouteRuterKeys(state.selectedRouteFilter)
+        : [...new Map(state.departures.flatMap(call => {
+            const quayId = call.quay?.id;
+            const lineId = call.serviceJourney?.journeyPattern?.line?.id;
+            const frontText = call.destinationDisplay?.frontText;
+            if (!quayId || !lineId || !frontText || !lineId.startsWith("RUT:Line:")) return [];
+            const id = [quayId, lineId, frontText].join("|");
+            return [[id, {id, quayId, lineId, frontText, route:call.serviceJourney?.journeyPattern?.line?.publicCode || ""}]];
+          })).values()];
     if (state.selectedRouteFilter) {
       $("route-filter-status").textContent = "Found "+ruterKeys.length+" stop/destination subscriptions for route "+state.selectedRouteFilter+"; waiting for live vehicle positions.";
     }
