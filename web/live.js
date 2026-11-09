@@ -138,7 +138,7 @@ function renderBoard() {
     const routeStyle=transportModeStyle("",route);
     return `<article class="departure">
       <div class="time">${esc(time)}<span class="sub">${call.realtime ? "Expected" : "Scheduled"}</span></div>
-      <div class="destination">${route ? `<span class="route-badge" style="background:${routeStyle.color}">${esc(route)}</span>` : ""}${esc(destination)}<span class="sub">${vehicle ? esc(vehicle.mode || vehicle.codespace) : " "}</span></div>
+      <div class="destination">${route ? `<span class="route-badge" style="background:${routeStyle.color}">${routeStyle.icon} ${esc(route)}</span>` : ""}${esc(destination)}<span class="sub">${vehicle ? esc(vehicle.mode || vehicle.codespace) : " "}</span></div>
       <div class="platform quay">${esc(quay)}</div>
       <div class="status ${delayClass}">${esc(delayText)}<span class="sub">${vehicle ? "Vehicle position available" : "No position match"}</span></div>
       <div class="vehicle"><span class="pill" title="${esc(vehicleLabel)}">${esc(vehicleLabel)}</span><span class="sub">${esc(coords)}</span>${vehicle?.source === "Ruter" && vehicle.location?.latitude != null ? `<button type="button" data-map-journey="${esc(journeyId)}">Show map</button>` : ""}</div>
@@ -583,7 +583,7 @@ function busNumberIcon(route) {
  const style=transportModeStyle("",route);
  return L.divIcon({
   className:"bus-number-marker",
-  html:'<span class="bus-number-dot" style="background:'+style.color+'">'+(number?esc(number):"")+'</span>',
+  html:'<span class="bus-number-dot" style="background:'+style.color+'">'+style.icon+(number?" "+esc(number):"")+'</span>',
   iconSize:[30,30],
   iconAnchor:[15,15],
   popupAnchor:[0,-15]
@@ -595,26 +595,26 @@ function transportModeStyle(mode, route) {
 
  // Route identifiers take precedence: a multimodal stop must not paint every
  // departure with the stop's shared transport mode.
- if(/^B/.test(code))return {color:"#174f9b",label:"Boat"};
- if(/^[RL]/.test(code))return {color:"#35c46a",label:"Train"};
+ if(/^B/.test(code))return {color:"#174f9b",label:"Boat",icon:"🛥️"};
+ if(/^[RL]/.test(code))return {color:"#35c46a",label:"Train",icon:"🚆"};
 
  const number=/^\d+$/.test(code)?Number(code):NaN;
- if(Number.isInteger(number)&&number>=1&&number<=9)return {color:"#16803c",label:"T-Bane"};
- if(Number.isInteger(number)&&number>=10&&number<=19)return {color:"#8fdcff",label:"Tram"};
- if(Number.isInteger(number)&&number>=20&&number<=1000)return {color:"#e00000",label:"Bus"};
+ if(Number.isInteger(number)&&number>=1&&number<=9)return {color:"#16803c",label:"T-Bane",icon:"🚇"};
+ if(Number.isInteger(number)&&number>=10&&number<=19)return {color:"#8fdcff",label:"Tram",icon:"🚋"};
+ if(Number.isInteger(number)&&number>=20&&number<=1000)return {color:"#e00000",label:"Bus",icon:"🚌"};
 
  // Only use the vehicle's own mode when no recognizable line code is present.
- if(value.includes("TRAM"))return {color:"#8fdcff",label:"Tram"};
- if(value.includes("RAIL")||value.includes("TRAIN"))return {color:"#35c46a",label:"Train"};
- if(value.includes("METRO")||value.includes("SUBWAY"))return {color:"#16803c",label:"T-Bane"};
- if(value.includes("FERRY")||value.includes("WATER")||value.includes("BOAT")||value.includes("SHIP"))return {color:"#174f9b",label:"Boat"};
+ if(value.includes("TRAM"))return {color:"#8fdcff",label:"Tram",icon:"🚋"};
+ if(value.includes("RAIL")||value.includes("TRAIN"))return {color:"#35c46a",label:"Train",icon:"🚆"};
+ if(value.includes("METRO")||value.includes("SUBWAY"))return {color:"#16803c",label:"T-Bane",icon:"🚇"};
+ if(value.includes("FERRY")||value.includes("WATER")||value.includes("BOAT")||value.includes("SHIP"))return {color:"#174f9b",label:"Boat",icon:"🛥️"};
  return {color:"#e00000",label:"Bus"};
 }
 function transportModeIcon(mode, route) {
  const style=transportModeStyle(mode,route),number=String(route||"").trim();
  return L.divIcon({
   className:"bus-number-marker",
-  html:'<span class="bus-number-dot" style="background:'+style.color+'">'+(number?esc(number):style.label[0])+'</span>',
+  html:'<span class="bus-number-dot" style="background:'+style.color+'">'+style.icon+(number?" "+esc(number):"")+'</span>',
   iconSize:[30,30],iconAnchor:[15,15],popupAnchor:[0,-15]
  });
 }
