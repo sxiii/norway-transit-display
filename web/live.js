@@ -344,7 +344,7 @@ function connectEnturModeTracking() {
     if(id)state.extraModeProgress.set(mode+":"+id,{...vehicle,mode});
    }
    if(state.mapMode==="all")updateAllVehicleMarkers();
-   if(state.trackAllMode)renderBoard();
+   renderBoard();
   }
  };
 }
@@ -521,7 +521,7 @@ async function probeRuter() {
           state.ruterProgress.set(journeyId, progress);
           renderBoard();
           if (state.mapMode === "all") updateAllVehicleMarkers();
-          else if (state.selectedMapJourney === journeyId) updateVehicleMap(progress);
+          else if (state.selectedMapJourney === journeyId) updateVehicleMap(ruterVehicleFor(journeyId),journeyId);
           const vehicleRef = progress.vehicleRef || progress.vehicleId || progress.vehicle?.id || null;
           log("Ruter vehicleProgress for "+journeyId+
             (vehicleRef ? " · vehicle "+vehicleRef : " · physical vehicle ID not present in selected fields")+
@@ -740,7 +740,6 @@ function setupStopSearch(){
  document.addEventListener("click",e=>{if(!e.target.closest(".stop-search-wrap"))$("stop-suggestions").hidden=true;});
 }
 $("map-center").addEventListener("click",()=>{if(state.mapMode==="all"){const bounds=[...state.allBusMarkers.values(),...state.allModeMarkers.values()].map(marker=>marker.getLatLng());if(bounds.length)state.map.fitBounds(bounds,{padding:[28,28],maxZoom:15});}else if(state.selectedMapJourney){showVehicleMap(state.selectedMapJourney);}});
-$("map-close").addEventListener("click"
 $("map-close").addEventListener("click",()=>{$("map-panel").hidden=true;});
 $("map-fullscreen").addEventListener("click",async()=>{try{if(!document.fullscreenElement)await $("map-panel").requestFullscreen();else await document.exitFullscreen();}catch(e){log("Fullscreen unavailable: "+e.message,"error");}});
 document.addEventListener("fullscreenchange",()=>{$("map-fullscreen").textContent=document.fullscreenElement?"Exit fullscreen":"Fullscreen";setTimeout(()=>state.map?.invalidateSize(),80);});
