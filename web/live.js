@@ -407,6 +407,7 @@ async function probeRuter() {
     };
   } catch (error) {
     $("ruter-details").textContent = error.message;
+    if (state.selectedRouteFilter) $("route-filter-status").textContent = "Route "+state.selectedRouteFilter+" tracking failed: "+error.message;
     setStatus("ruter-status", "Probe failed", "bad", error.message);
     log("Ruter probe failed: "+error.message, "error");
   }
