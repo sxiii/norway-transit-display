@@ -115,7 +115,7 @@ function renderBoard() {
   }
   const matched = calls.reduce((n, c) => n + (vehiclesByJourney.has(c.serviceJourney?.id) || !!ruterVehicleFor(c.serviceJourney?.id) ? 1 : 0), 0);
   $("departure-count").textContent = calls.length;
-  $("vehicle-count").textContent = state.vehicles.length;
+  $("vehicle-count").textContent = state.vehicles.length + state.extraModeProgress.size;
   $("matched-count").textContent = matched;
   if (!calls.length) {
     $("rows").innerHTML = state.selectedRouteFilter
