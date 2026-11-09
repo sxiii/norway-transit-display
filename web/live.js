@@ -578,8 +578,8 @@ function initVehicleMap() {
 function routeLabelForJourney(journeyId) {
  const call=state.departures.find(item=>item.serviceJourney?.id===journeyId);
  if(!call)return "Ruter bus";
- const route=call.serviceJourney?.journeyPattern?.line?.publicCode||call.serviceJourney?.journeyPattern?.line?.name||"";
- const destination=call.destinationDisplay?.frontText||"";
+ const route=state.ruterJourneyRoutes.get(journeyId)||call?.serviceJourney?.journeyPattern?.line?.publicCode||call?.serviceJourney?.journeyPattern?.line?.name||"";
+ const destination=call?.destinationDisplay?.frontText||"";
  return [route,destination].filter(Boolean).join(" ")||"Ruter bus";
 }
 function busRouteNumber(journeyId) {
@@ -724,6 +724,7 @@ $("map-center").addEventListener("click",()=>{const bounds=[...state.allBusMarke
 $("map-selected-stop").addEventListener("click",()=>{
   const wasGlobal=state.trackAllMode;
   state.trackAllMode=false;
+  $("tracking-status").textContent="Map filtered to vehicles serving "+(state.stopName||"the selected stop")+". The departure board remains unchanged.";
   if(wasGlobal)closeRuterSocket();
   showAllSyncedBuses();
   if(wasGlobal)probeRuter();
