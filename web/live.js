@@ -174,22 +174,11 @@ async function refreshEntur() {
       gql(CONFIG.vehiclesUrl, vehicleQuery("VYG"), enturHeaders),
       gql(CONFIG.vehiclesUrl, vehicleQuery("VYX"), enturHeaders)
     ]);
-    // Stop-register metadata lives in Transit Data, not Journey Planner.
-    let stopMetadata = null;
-    try {
-      const metadata = await gql(CONFIG.transitDataUrl,
-        `query SelectedStopMetadata { stopPlace(id: ${JSON.stringify(stopId)}) { id name transportMode otherTransportModes stopPlaceType } }`,
-        enturHeaders
-      );
-      stopMetadata = metadata.stopPlace;
-    } catch (metadataError) {
-      log("Entur stop-register metadata unavailable: " + metadataError.message, "error");
-    }
     const stop = departureData.stopPlace;
     if (!stop) throw new Error("Entur returned no stopPlace for " + stopId);
     state.stopName = stop.name || stopId;
-    state.stopType = stopMetadata?.stopPlaceType || "";
-    state.stopTransportModes = [...new Set([stopMetadata?.transportMode || stop.transportMode, ...(stopMetadata?.otherTransportModes || [])].filter(Boolean))];
+    state.stopType = "";
+    state.stopTransportModes = stop.transportMode ? [stop.transportMode] : [];
     state.departures = stop.estimatedCalls || [];
     state.vehicles = flattenVehicles([{code:"VYG",data:vyg},{code:"VYX",data:vyx}]);
     state.lastUpdated = Date.now();
@@ -719,7 +708,7 @@ document.addEventListener("fullscreenchange",()=>{$("map-fullscreen").textConten
 
 setupStopSearch();
 $("refresh").addEventListener("click", refreshEntur);
-$("ruter-probe").addEventListener("click", () => { state.selectedRouteFilter=""; state.trackAllMode=true; renderBoard(); $("route-filter-status").textContent="Discovering all Ruter bus lines and their stops…"; probeRuter(); });
+$("ruter-probe").addEventListener("click", () => { state.selectedRouteFilter=""; state.trackAllMode=false; renderBoard(); probeRuter(); });
 $("track-all").addEventListener("click", () => {
   state.selectedRouteFilter="";
   state.trackAllMode=true;
