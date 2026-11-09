@@ -103,7 +103,7 @@ function renderBoard() {
   const selectedJourneys=new Set(calls.map(call=>call.serviceJourney?.id).filter(Boolean));
   const gpsJourneys=new Set();
   for(const vehicle of state.vehicles){
-    if(vehicle.journeyId && Number.isFinite(Number(vehicle.location?.latitude)) && Number.isFinite(Number(vehicle.location?.longitude)) &&
+    if(vehicle.journeyId && vehicle.location?.latitude != null && vehicle.location?.longitude != null && Number.isFinite(Number(vehicle.location.latitude)) && Number.isFinite(Number(vehicle.location.longitude)) &&
        (state.trackAllMode || selectedJourneys.has(vehicle.journeyId))) gpsJourneys.add(vehicle.journeyId);
   }
   for(const vehicle of state.extraModeProgress.values()){
@@ -112,7 +112,7 @@ function renderBoard() {
        (state.trackAllMode || selectedJourneys.has(journeyId))) gpsJourneys.add(journeyId);
   }
   for(const [journeyId,progress] of state.ruterProgress){
-    if(Number.isFinite(Number(progress.latitude)) && Number.isFinite(Number(progress.longitude)) &&
+    if(progress.latitude != null && progress.longitude != null && Number.isFinite(Number(progress.latitude)) && Number.isFinite(Number(progress.longitude)) &&
        (state.trackAllMode || selectedJourneys.has(journeyId))) gpsJourneys.add(journeyId);
   }
   const gpsCount=gpsJourneys.size;
@@ -144,7 +144,7 @@ function renderBoard() {
     const quay = call.quay?.name || call.quay?.id || "—";
     const vehicleLabel = vehicle?.vehicleId || (vehicle?.source === "Ruter" ? "Ruter live" : vehicle ? (vehicle.mode || vehicle.codespace || "Tracked") : "Not matched");
     const location = vehicle?.location;
-    const hasCoords = location && Number.isFinite(Number(location.latitude)) && Number.isFinite(Number(location.longitude));
+    const hasCoords = location && location.latitude != null && location.longitude != null && Number.isFinite(Number(location.latitude)) && Number.isFinite(Number(location.longitude));
     const coords = hasCoords ? Number(location.latitude).toFixed(4) + ", " + Number(location.longitude).toFixed(4) : "";
     const routeStyle=transportModeStyle(vehicle?.mode || "",route);
     return `<article class="departure">
@@ -351,7 +351,7 @@ function connectEnturModeTracking() {
    if(!Array.isArray(vehicles))return;
    for(const vehicle of vehicles){
     const loc=vehicle.location;
-    if(!loc||!Number.isFinite(Number(loc.latitude))||!Number.isFinite(Number(loc.longitude)))continue;
+    if(!loc||loc.latitude==null||loc.longitude==null||!Number.isFinite(Number(loc.latitude))||!Number.isFinite(Number(loc.longitude)))continue;
     const id=vehicle.vehicleId||vehicle.vehicleRef||vehicle.serviceJourney?.id;
     if(id)state.extraModeProgress.set(mode+":"+id,{...vehicle,mode});
    }
@@ -642,6 +642,7 @@ function updateAllVehicleMarkers() {
  for(const [journeyId,progress] of state.ruterProgress){
   const route=busRouteNumber(journeyId);
   if(!inScope(journeyId))continue;
+  if(progress.latitude==null||progress.longitude==null)continue;
   const lat=Number(progress.latitude),lon=Number(progress.longitude);
   if(!Number.isFinite(lat)||!Number.isFinite(lon))continue;
   const point=[lat,lon],label=routeLabelForJourney(journeyId),vin=progress.id||"Ruter bus";
@@ -663,7 +664,8 @@ function updateAllVehicleMarkers() {
  }
  const activeKeys=new Set();
  for(const [id,vehicle] of enturVehicles){
-  const lat=Number(vehicle.location?.latitude),lon=Number(vehicle.location?.longitude);
+  if(vehicle.location?.latitude==null||vehicle.location?.longitude==null)continue;
+  const lat=Number(vehicle.location.latitude),lon=Number(vehicle.location.longitude);
   if(!Number.isFinite(lat)||!Number.isFinite(lon))continue;
   const journeyId=vehicle.journeyId||vehicle.serviceJourney?.id;
   const call=state.departures.find(item=>item.serviceJourney?.id===journeyId);
