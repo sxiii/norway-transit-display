@@ -244,6 +244,7 @@ async function discoverAllRuterKeys() {
   const lines = (lineData.lines?.nodes || []).filter(line => line.id?.startsWith("RUT:Line:"));
   if (!lines.length) throw new Error("Entur returned no Ruter bus lines.");
   const keys = new Map();
+  const linesTotal = lines.length;
   let completed = 0;
   const workers = Array.from({length:5}, async () => {
     while (true) {
@@ -279,7 +280,6 @@ async function discoverAllRuterKeys() {
       }
     }
   });
-  const linesTotal = lines.length;
   await Promise.all(workers);
   if (!keys.size) throw new Error("Ruter bus lines were found, but no stop/destination subscriptions were returned.");
   return [...keys.values()];
@@ -312,7 +312,9 @@ async function probeRuter() {
             const id = [quayId, lineId, frontText].join("|");
             return [[id, {id, quayId, lineId, frontText, route:call.serviceJourney?.journeyPattern?.line?.publicCode || ""}]];
           })).values()];
-    if (state.selectedRouteFilter) {
+    if (state.trackAllMode) {
+      $("route-filter-status").textContent = "Found "+ruterKeys.length+" stop/destination subscriptions across the Ruter bus network; waiting for live vehicle positions.";
+    } else if (state.selectedRouteFilter) {
       $("route-filter-status").textContent = "Found "+ruterKeys.length+" stop/destination subscriptions for route "+state.selectedRouteFilter+"; waiting for live vehicle positions.";
     }
     if (!ruterKeys.length) {
@@ -613,7 +615,16 @@ document.addEventListener("fullscreenchange",()=>{$("map-fullscreen").textConten
 
 setupStopSearch();
 $("refresh").addEventListener("click", refreshEntur);
-$("ruter-probe").addEventListener("click", () => { state.selectedRouteFilter=""; renderBoard(); probeRuter(); });
+$("ruter-probe").addEventListener("click", () => { state.selectedRouteFilter=""; state.trackAllMode=false; renderBoard(); probeRuter(); });
+$("track-all").addEventListener("click", () => {
+  state.selectedRouteFilter="";
+  state.trackAllMode=true;
+  $("route-number").value="";
+  renderBoard();
+  $("route-filter-status").textContent="Discovering all Ruter bus lines and their stops… this can take a little while.";
+  showAllSyncedBuses();
+  probeRuter();
+});
 $("route-track").addEventListener("click", () => {
   const route=$("route-number").value.trim();
   if (!/^\d+[A-Za-z]?$/.test(route)) {
@@ -621,6 +632,7 @@ $("route-track").addEventListener("click", () => {
     return;
   }
   state.selectedRouteFilter=route;
+  state.trackAllMode=false;
   renderBoard();
   $("route-filter-status").textContent="Connecting subscriptions for route "+route+"…";
   showAllSyncedBuses();
@@ -631,6 +643,7 @@ $("route-number").addEventListener("keydown", event => {
 });
 $("route-clear").addEventListener("click", () => {
   state.selectedRouteFilter="";
+  state.trackAllMode=false;
   renderBoard();
   $("route-number").value="";
   $("route-filter-status").textContent="Route filter cleared. Reconnecting to all currently available lines…";
