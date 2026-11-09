@@ -86,15 +86,15 @@ footer{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;color:
   <div class="providers">
     <div class="provider">
       <h3>Ruter · Live tracking controls</h3>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button id="ruter-probe" type="button">Connect Ruter live data · all lines</button> <button id="ruter-all-map" type="button">Open map</button></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><button id="ruter-probe" type="button" title="Connects to Ruter and subscribes to bus vehicle positions across all lines.">Connect Ruter buses · all lines</button> <button id="ruter-all-map" type="button" title="Shows every bus, train, tram, metro or boat currently available with GPS coordinates.">Map: all GPS vehicles</button></div>
     </div>
     <div class="provider">
       <h3>Track one bus route</h3>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <input id="route-number" type="text" inputmode="numeric" maxlength="6" placeholder="e.g. 83" aria-label="Bus route number" style="width:110px">
-        <button id="route-track" type="button" title="Follows every stop served by the selected bus line.">Track route</button>
+        <button id="route-track" type="button" title="Tracks the entered bus route and shows only matching vehicles with GPS positions on the map.">Track route · map</button>
         <button id="track-all" type="button" title="Adds live trains, trams and boats across the Oslo region.">Track all</button>
-        <button id="route-clear" type="button">Clear filter</button>
+        <button id="route-clear" type="button" title="Removes the route filter and returns the map to all available GPS vehicles.">Show all</button>
       </div>
       <div id="route-filter-status" class="status-detail" aria-live="polite"></div>
     </div>
