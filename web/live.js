@@ -580,9 +580,11 @@ function busRouteNumber(journeyId) {
 }
 function selectedStopModeStyle() {
  const modes=(state.stopTransportModes||[]).flat(Infinity).map(value=>String(value||"").toUpperCase());
- // A stop served only by trams provides reliable mode context for its labels
- // and Ruter-style numbered map markers (which otherwise default to red).
- if(modes.length && modes.every(mode=>mode.includes("TRAM"))) return {color:"#8fdcff",label:"Tram"};
+ // Stop mode is the reliable fallback when route codes are numeric or absent.
+ // Prefer a specific rail mode over generic BUS when a stop is multimodal.
+ if(modes.some(mode=>mode.includes("TRAM"))) return {color:"#8fdcff",label:"Tram"};
+ if(modes.some(mode=>mode.includes("RAIL")||mode.includes("TRAIN"))) return {color:"#35c46a",label:"Train"};
+ if(modes.some(mode=>mode.includes("WATER")||mode.includes("FERRY")||mode.includes("BOAT")||mode.includes("SHIP"))) return {color:"#174f9b",label:"Boat"};
  return null;
 }
 function busNumberIcon(route) {
@@ -603,7 +605,7 @@ function transportModeStyle(mode, route) {
  // Prefer the vehicle mode supplied by Entur, accepting its common aliases.
  if(value.includes("TRAM"))return {color:"#8fdcff",label:"Tram"};
  if(value==="RAIL"||value.includes("TRAIN"))return {color:"#35c46a",label:"Train"};
- if(value==="FERRY"||value==="WATER"||value.includes("BOAT"))return {color:"#174f9b",label:"Boat"};
+ if(value.includes("FERRY")||value.includes("WATER")||value.includes("BOAT")||value.includes("SHIP"))return {color:"#174f9b",label:"Boat"};
 
  // Some vehicle feeds omit/normalize mode inconsistently. Fall back to the
  // established Norwegian route-code families: B* boat, R* train, 10–19 tram.
