@@ -587,15 +587,25 @@ function busNumberIcon(route) {
   popupAnchor:[0,-15]
  });
 }
-function transportModeStyle(mode) {
+function transportModeStyle(mode, route) {
  const value=String(mode||"").toUpperCase();
- if(value==="TRAM")return {color:"#8fdcff",label:"Tram"};
- if(value==="RAIL")return {color:"#35c46a",label:"Train"};
- if(value==="FERRY")return {color:"#174f9b",label:"Boat"};
+ const code=String(route||"").trim().toUpperCase();
+
+ // Prefer the vehicle mode supplied by Entur, accepting its common aliases.
+ if(value.includes("TRAM"))return {color:"#8fdcff",label:"Tram"};
+ if(value==="RAIL"||value.includes("TRAIN"))return {color:"#35c46a",label:"Train"};
+ if(value==="FERRY"||value==="WATER"||value.includes("BOAT"))return {color:"#174f9b",label:"Boat"};
+
+ // Some vehicle feeds omit/normalize mode inconsistently. Fall back to the
+ // established Norwegian route-code families: B* boat, R* train, 10–19 tram.
+ if(/^B\\w*/.test(code))return {color:"#174f9b",label:"Boat"};
+ if(/^R\\w*/.test(code))return {color:"#35c46a",label:"Train"};
+ const number=Number(code);
+ if(Number.isInteger(number)&&number>=10&&number<=19)return {color:"#8fdcff",label:"Tram"};
  return {color:"#e00000",label:"Bus"};
 }
 function transportModeIcon(mode, route) {
- const style=transportModeStyle(mode),number=String(route||"").trim();
+ const style=transportModeStyle(mode,route),number=String(route||"").trim();
  return L.divIcon({
   className:"bus-number-marker",
   html:'<span class="bus-number-dot" style="background:'+style.color+'">'+(number?esc(number):style.label[0])+'</span>',
@@ -633,8 +643,8 @@ function updateAllVehicleMarkers() {
   const lat=Number(vehicle.location?.latitude),lon=Number(vehicle.location?.longitude);
   if(!Number.isFinite(lat)||!Number.isFinite(lon))continue;
   const mode=vehicle.mode||"";
-  const style=transportModeStyle(mode);
-  const route=vehicle.line?.publicCode||vehicle.line?.name||vehicle.lineName||style.label;
+  const route=vehicle.line?.publicCode||vehicle.line?.name||vehicle.lineName||"";
+  const style=transportModeStyle(mode,route);
   const point=[lat,lon];
   let marker=state.allModeMarkers.get(id);
   if(!marker) { marker=L.marker(point,{icon:transportModeIcon(mode,route)}).addTo(state.map);state.allModeMarkers.set(id,marker); }
