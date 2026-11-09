@@ -670,7 +670,7 @@ function updateAllVehicleMarkers() {
   if(!Number.isFinite(lat)||!Number.isFinite(lon))continue;
   const journeyId=vehicle.journeyId||vehicle.serviceJourney?.id;
   const call=state.departures.find(item=>item.serviceJourney?.id===journeyId);
-  const route=vehicle.line?.publicCode||vehicle.line?.lineName||vehicle.line?.lineRef||call?.serviceJourney?.journeyPattern?.line?.publicCode||call?.serviceJourney?.journeyPattern?.line?.name||"";
+  const route=vehicle.line?.publicCode||vehicle.line?.lineName||call?.serviceJourney?.journeyPattern?.line?.publicCode||call?.serviceJourney?.journeyPattern?.line?.name||"";
   if(!inScope(journeyId))continue;
   const mode=vehicle.mode||"",style=transportModeStyle(mode,route),point=[lat,lon],key="entur:"+id;
   activeKeys.add(key);
