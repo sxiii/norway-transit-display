@@ -577,7 +577,7 @@ function initVehicleMap() {
 }
 function routeLabelForJourney(journeyId) {
  const call=state.departures.find(item=>item.serviceJourney?.id===journeyId);
- if(!call)return "Ruter bus";
+ if(!call&&!state.ruterJourneyRoutes.has(journeyId))return "Ruter bus";
  const route=state.ruterJourneyRoutes.get(journeyId)||call?.serviceJourney?.journeyPattern?.line?.publicCode||call?.serviceJourney?.journeyPattern?.line?.name||"";
  const destination=call?.destinationDisplay?.frontText||"";
  return [route,destination].filter(Boolean).join(" ")||"Ruter bus";
