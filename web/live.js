@@ -135,7 +135,7 @@ function renderBoard() {
     const quay = call.quay?.name || call.quay?.id || "—";
     const vehicleLabel = vehicle?.vehicleId || (vehicle?.source === "Ruter" ? "Ruter live" : vehicle ? "Tracked" : "Not matched");
     const coords = vehicle?.location?.latitude != null ? vehicle.location.latitude.toFixed(4) + ", " + vehicle.location.longitude.toFixed(4) : "";
-    const routeStyle=selectedStopModeStyle() || transportModeStyle("",route);
+    const routeStyle=transportModeStyle("",route);
     return `<article class="departure">
       <div class="time">${esc(time)}<span class="sub">${call.realtime ? "Expected" : "Scheduled"}</span></div>
       <div class="destination">${route ? `<span class="route-badge" style="background:${routeStyle.color}">${esc(route)}</span>` : ""}${esc(destination)}<span class="sub">${vehicle ? esc(vehicle.mode || vehicle.codespace) : " "}</span></div>
@@ -578,18 +578,9 @@ function busRouteNumber(journeyId) {
  return state.ruterJourneyRoutes.get(journeyId) || call?.serviceJourney?.journeyPattern?.line?.publicCode ||
   call?.serviceJourney?.journeyPattern?.line?.name || "";
 }
-function selectedStopModeStyle() {
- const modes=(state.stopTransportModes||[]).flat(Infinity).map(value=>String(value||"").toUpperCase());
- // Stop mode is the reliable fallback when route codes are numeric or absent.
- // Prefer a specific rail mode over generic BUS when a stop is multimodal.
- if(modes.some(mode=>mode.includes("TRAM"))) return {color:"#8fdcff",label:"Tram"};
- if(modes.some(mode=>mode.includes("RAIL")||mode.includes("TRAIN"))) return {color:"#35c46a",label:"Train"};
- if(modes.some(mode=>mode.includes("WATER")||mode.includes("FERRY")||mode.includes("BOAT")||mode.includes("SHIP"))) return {color:"#174f9b",label:"Boat"};
- return null;
-}
 function busNumberIcon(route) {
  const number=String(route||"").trim();
- const style=selectedStopModeStyle() || transportModeStyle("",route);
+ const style=transportModeStyle("",route);
  return L.divIcon({
   className:"bus-number-marker",
   html:'<span class="bus-number-dot" style="background:'+style.color+'">'+(number?esc(number):"")+'</span>',
@@ -602,17 +593,21 @@ function transportModeStyle(mode, route) {
  const value=String(mode||"").toUpperCase();
  const code=String(route||"").trim().toUpperCase();
 
- // Prefer the vehicle mode supplied by Entur, accepting its common aliases.
- if(value.includes("TRAM"))return {color:"#8fdcff",label:"Tram"};
- if(value==="RAIL"||value.includes("TRAIN"))return {color:"#35c46a",label:"Train"};
- if(value.includes("FERRY")||value.includes("WATER")||value.includes("BOAT")||value.includes("SHIP"))return {color:"#174f9b",label:"Boat"};
+ // Route identifiers take precedence: a multimodal stop must not paint every
+ // departure with the stop's shared transport mode.
+ if(/^B/.test(code))return {color:"#174f9b",label:"Boat"};
+ if(/^[RL]/.test(code))return {color:"#35c46a",label:"Train"};
 
- // Some vehicle feeds omit/normalize mode inconsistently. Fall back to the
- // established Norwegian route-code families: B* boat, R* train, 10–19 tram.
- if(/^B\\w*/.test(code))return {color:"#174f9b",label:"Boat"};
- if(/^R\\w*/.test(code))return {color:"#35c46a",label:"Train"};
- const number=Number(code);
+ const number=/^\d+$/.test(code)?Number(code):NaN;
+ if(Number.isInteger(number)&&number>=1&&number<=9)return {color:"#16803c",label:"T-Bane"};
  if(Number.isInteger(number)&&number>=10&&number<=19)return {color:"#8fdcff",label:"Tram"};
+ if(Number.isInteger(number)&&number>=20&&number<=1000)return {color:"#e00000",label:"Bus"};
+
+ // Only use the vehicle's own mode when no recognizable line code is present.
+ if(value.includes("TRAM"))return {color:"#8fdcff",label:"Tram"};
+ if(value.includes("RAIL")||value.includes("TRAIN"))return {color:"#35c46a",label:"Train"};
+ if(value.includes("METRO")||value.includes("SUBWAY"))return {color:"#16803c",label:"T-Bane"};
+ if(value.includes("FERRY")||value.includes("WATER")||value.includes("BOAT")||value.includes("SHIP"))return {color:"#174f9b",label:"Boat"};
  return {color:"#e00000",label:"Bus"};
 }
 function transportModeIcon(mode, route) {
