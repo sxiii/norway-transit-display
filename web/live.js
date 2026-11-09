@@ -56,7 +56,7 @@ function vehicleQuery(code) {
 function departureQuery(stopId, count) {
   const id = JSON.stringify(stopId);
   return `query { stopPlace(id: ${id}) {
-    id name
+    id name transportMode otherTransportModes stopType
     estimatedCalls(numberOfDepartures: ${count}) {
       realtime aimedDepartureTime expectedDepartureTime actualDepartureTime
       destinationDisplay { frontText }
@@ -145,8 +145,18 @@ function renderBoard() {
   }).join("");
   $("rows").querySelectorAll("[data-map-journey]").forEach(button => button.addEventListener("click", () => showVehicleMap(button.dataset.mapJourney)));
   $("stop-name").textContent = state.stopName || $("stop-id").value.trim();
+  renderStopMetadata();
   $("date-label").textContent = "Live data · " + new Date().toLocaleDateString();
   $("updated").textContent = "Last successful refresh: " + new Date(state.lastUpdated).toLocaleTimeString();
+}
+function renderStopMetadata() {
+ const id=$("stop-id")?.value?.trim() || "";
+ const modes=state.stopTransportModes||[];
+ const modeLabels={bus:"Bus",tram:"Tram",rail:"Train",water:"Boat",ferry:"Ferry",metro:"Metro",coach:"Coach",air:"Air",funicular:"Funicular",lift:"Lift"};
+ const pretty=value=>modeLabels[String(value).toLowerCase()]||String(value).replace(/([a-z])([A-Z])/g,"$1 $2").replace(/_/g," ").replace(/^./,c=>c.toUpperCase());
+ $("selected-stop-id").textContent=id||"—";
+ $("selected-stop-type").textContent=state.stopType?pretty(state.stopType):"—";
+ $("selected-stop-modes").textContent=modes.length?modes.map(pretty).join(" · "):"Not reported";
 }
 function esc(value) {
   return String(value ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
@@ -167,10 +177,13 @@ async function refreshEntur() {
     const stop = departureData.stopPlace;
     if (!stop) throw new Error("Entur returned no stopPlace for " + stopId);
     state.stopName = stop.name || stopId;
+    state.stopType = stop.stopType || "";
+    state.stopTransportModes = [...new Set([stop.transportMode, ...(stop.otherTransportModes || [])].filter(Boolean))];
     state.departures = stop.estimatedCalls || [];
     state.vehicles = flattenVehicles([{code:"VYG",data:vyg},{code:"VYX",data:vyx}]);
     state.lastUpdated = Date.now();
     $("stop-name").textContent = stop.name || stopId;
+    renderStopMetadata();
     renderBoard();
     setStatus("entur-status", "Connected", "ok", stop.name + " · " + state.departures.length + " departures · " + state.vehicles.length + " vehicles");
     log("Entur refreshed: " + state.departures.length + " departures, " + state.vehicles.length + " VYG/VYX vehicles.", "success");
