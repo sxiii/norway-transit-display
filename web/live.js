@@ -340,7 +340,7 @@ function connectEnturModeTracking() {
     pending.set(id,mode);
     ws.send(JSON.stringify({id,type:"subscribe",payload:{operationName:"ModeVehicles",query,variables:{mode,boundingBox:bounds}}}));
    });
-   $("tracking-status").textContent="Ruter buses plus Entur live T-Bane, trains, trams and boats in the Oslo region.";
+   $("tracking-status").textContent="Entur live GPS feed connected · results stay filtered to the selected stop unless you choose Track everything.";
    return;
   }
   if(msg.type==="next"){
@@ -708,7 +708,7 @@ async function searchStops(query){
   stops.slice(0,8).forEach(stop=>{
    const b=document.createElement("button");b.type="button";b.className="suggestion";
    b.innerHTML=esc(stop.name)+"<small>"+esc([stop.area,stop.id].filter(Boolean).join(" · "))+"</small>";
-   b.addEventListener("click",()=>{$("stop-id").value=stop.id;$("stop-search").value=stop.name;box.hidden=true;state.trackAllMode=false;if(state.extraModeSocket){try{state.extraModeSocket.close(1000,"Selected-stop scope");}catch{}state.extraModeSocket=null;}state.extraModeProgress.clear();state.ruterProgress.clear();state.selectedMapJourney=null;if(state.mapMode==="all"){clearVehicleMarkers();state.mapMode="single";}$("map-panel").hidden=true;$("tracking-status").textContent="Loading departures and vehicle positions for "+stop.name+"…";refreshEntur(true);});
+   b.addEventListener("click",()=>{$("stop-id").value=stop.id;$("stop-search").value=stop.name;box.hidden=true;state.trackAllMode=false;state.ruterProgress.clear();state.selectedMapJourney=null;if(state.mapMode==="all"){clearVehicleMarkers();state.mapMode="single";}$("map-panel").hidden=true;$("tracking-status").textContent="Loading departures and vehicle positions for "+stop.name+"…";refreshEntur(true);});
    box.append(b);
   });box.hidden=false;
  }catch(e){if(e.name!=="AbortError")log("Stop search failed: "+e.message,"error");}
@@ -724,11 +724,7 @@ $("map-center").addEventListener("click",()=>{const bounds=[...state.allBusMarke
 $("map-selected-stop").addEventListener("click",()=>{
   const wasGlobal=state.trackAllMode;
   state.trackAllMode=false;
-  if(wasGlobal){
-    if(state.extraModeSocket){try{state.extraModeSocket.close(1000,"Selected-stop scope");}catch{}state.extraModeSocket=null;}
-    state.extraModeProgress.clear();
-    closeRuterSocket();
-  }
+  if(wasGlobal)closeRuterSocket();
   showAllSyncedBuses();
   if(wasGlobal)probeRuter();
 });
@@ -741,9 +737,8 @@ $("refresh").addEventListener("click",()=>refreshEntur(true));
 $("track-everything").addEventListener("click", () => {
   state.trackAllMode=true;
   state.ruterProgress.clear();
-  state.extraModeProgress.clear();
   $("tracking-status").textContent="Starting global tracking · discovering all Ruter bus lines and connecting Entur vehicle feeds…";
-  connectEnturModeTracking();
+  if(!state.extraModeSocket)connectEnturModeTracking();
   showAllSyncedBuses();
   probeRuter();
 });
@@ -777,5 +772,6 @@ function tick() { $("clock").textContent = new Intl.DateTimeFormat(undefined,{ho
 tick(); setInterval(tick,1000);
 $("stop-id").value = CONFIG.defaultStop;
 log("Ready. The departure board is scoped to the selected stop; use Track everything for global vehicle positions.");
+connectEnturModeTracking();
 refreshEntur(true);
 state.timer = setInterval(refreshEntur, CONFIG.refreshMs);
