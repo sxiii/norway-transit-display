@@ -179,18 +179,17 @@ function closeRuterSocket() {
 }
 async function discoverRouteRuterKeys(route) {
   const lineData = await gql(CONFIG.transitDataUrl,
-    'query RouteLines($route: String!) { lines(publicCode: $route, transportModes: ["bus"], first: 1000) { nodes { id publicCode name } } }',
+    `query RouteLines { lines(publicCode: ${JSON.stringify(route)}, transportModes: ["bus"], first: 1000) { nodes { id publicCode name } } }`,
     enturHeaders
   );
-  const lines = lineData.lines?.nodes || [];
+  const lines = (lineData.lines?.nodes || []).filter(line => line.id?.startsWith("RUT:Line:"));
   if (!lines.length) throw new Error("Entur found no bus lines with public route number " + route + ".");
 
   const keys = new Map();
   for (const line of lines) {
     const detail = await gql(CONFIG.transitDataUrl,
-      'query RouteLineQuays($id: String!, $lineIds: [String]!) { line(id: $id) { id publicCode name quays(first: 1000) { nodes { id estimatedCalls(numberOfDepartures: 1000, whiteListed: { lines: $lineIds }) { destinationDisplay { frontText } } } } } }',
-      enturHeaders
-    , undefined);
+      `query RouteLineQuays { line(id: ${JSON.stringify(line.id)}) { id publicCode name quays(first: 1000) { nodes { id estimatedCalls(numberOfDepartures: 1000, whiteListed: { lines: [${JSON.stringify(line.id)}] }) { destinationDisplay { frontText } } } } } }`,
+      enturHeaders);
     const quays = detail.line?.quays?.nodes || [];
     for (const quay of quays) {
       for (const call of quay.estimatedCalls || []) {
@@ -267,8 +266,8 @@ async function probeRuter() {
         context+": "+errors.map(e=>e.message || "Unknown error").join("; "));
       return true;
     };
-    const subscribe = (id, operationName, query, variables) => {
-      pending.set(id, {operationName, variables, routeNumber:state.selectedRouteFilter || null});
+    const subscribe = (id, operationName, query, variables, routeNumber = null) => {
+      pending.set(id, {operationName, variables, routeNumber});
       ws.send(JSON.stringify({id, type:"subscribe", payload:{operationName, query, variables}}));
     };
     const timeout = setTimeout(() => {
