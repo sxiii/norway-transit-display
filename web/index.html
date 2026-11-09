@@ -12,7 +12,7 @@
 header{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;border-bottom:1px solid #563044;padding-bottom:22px}
 .eyebrow{font-size:12px;letter-spacing:.19em;text-transform:uppercase;color:#c49aae;font-weight:750}
 h1{font-size:clamp(32px,5vw,60px);line-height:1;margin:10px 0 0;letter-spacing:-.045em}
-.header-right{text-align:right;color:#c9a8b9;font-size:14px}.clock{font-variant-numeric:tabular-nums;font-size:clamp(24px,3vw,38px);font-weight:750;color:#fff}
+.header-right{text-align:right;color:#c9a8b9;font-size:14px}.transport-legend{display:flex;justify-content:flex-end;gap:12px;flex-wrap:wrap;margin-top:7px;color:#e3cbd7;font-size:11px;font-weight:700}.transport-legend span{display:inline-flex;align-items:center;gap:5px}.transport-legend i{display:inline-block;width:8px;height:8px;border-radius:50%}.clock{font-variant-numeric:tabular-nums;font-size:clamp(24px,3vw,38px);font-weight:750;color:#fff}
 .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:22px 0}
 .stat{background:#21121d;border:1px solid #4a2b40;border-radius:14px;padding:15px 18px}.stat strong{display:block;font-size:clamp(24px,3vw,34px);font-variant-numeric:tabular-nums}.stat span{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#c9a8ba;font-weight:700}
 .panel{background:#1a0e17;border:1px solid #543149;border-radius:16px;padding:16px;margin:16px 0}
@@ -59,7 +59,7 @@ footer{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;color:
 <main class="shell">
 <header>
   <div><div class="eyebrow">Norway · Real-time passenger information</div><h1 id="stop-name">Transit departures</h1></div>
-  <div class="header-right"><div class="clock" id="clock">--:--:--</div><div id="date-label">Connecting to data sources</div></div>
+  <div class="header-right"><div class="clock" id="clock">--:--:--</div><div id="date-label">Connecting to data sources</div><div class="transport-legend" aria-label="Transport color legend"><span><i style="background:#e30613"></i>Bus</span><span><i style="background:#8fdcff"></i>Tram</span><span><i style="background:#35c46a"></i>Train</span><span><i style="background:#174f9b"></i>Boat</span></div></div>
 </header>
 <section class="stats">
   <div class="stat"><strong id="departure-count">—</strong><span>Departures shown</span></div>
@@ -92,11 +92,11 @@ footer{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;color:
       <h3>Track one bus route</h3>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <input id="route-number" type="text" inputmode="numeric" maxlength="6" placeholder="e.g. 83" aria-label="Bus route number" style="width:110px">
-        <button id="route-track" type="button">Track route</button>
-        <button id="track-all" type="button">Track all</button>
+        <button id="route-track" type="button" title="Follows every stop served by the selected bus line.">Track route</button>
+        <button id="track-all" type="button" title="Adds live trains, trams and boats across the Oslo region.">Track all</button>
         <button id="route-clear" type="button">Clear filter</button>
       </div>
-      <div id="route-filter-status" class="status-detail" aria-live="polite">Track route follows every stop served by a bus line. Track all adds live trains, trams and boats across the Oslo region. Colors: <span style="color:#e30613">bus red</span> · <span style="color:#8fdcff">tram light blue</span> · <span style="color:#35c46a">train green</span> · <span style="color:#174f9b">boat dark blue</span>.</div>
+      <div id="route-filter-status" class="status-detail" aria-live="polite"></div>
     </div>
     <div class="provider">
       <h3>Entur · Public APIs</h3>
