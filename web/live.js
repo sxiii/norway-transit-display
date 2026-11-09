@@ -596,7 +596,7 @@ function transportModeStyle(mode, route) {
  // Route identifiers take precedence: a multimodal stop must not paint every
  // departure with the stop's shared transport mode.
  if(/^B/.test(code))return {color:"#174f9b",label:"Boat",icon:"🛥️"};
- if(/^[RL]/.test(code))return {color:"#35c46a",label:"Train",icon:"🚆"};
+ if(/^(?:FLY|R|L)/.test(code))return {color:"#35c46a",label:"Train",icon:"🚆"};
 
  const number=/^\d+$/.test(code)?Number(code):NaN;
  if(Number.isInteger(number)&&number>=1&&number<=9)return {color:"#16803c",label:"T-Bane",icon:"🚇"};
@@ -608,7 +608,7 @@ function transportModeStyle(mode, route) {
  if(value.includes("RAIL")||value.includes("TRAIN"))return {color:"#35c46a",label:"Train",icon:"🚆"};
  if(value.includes("METRO")||value.includes("SUBWAY"))return {color:"#16803c",label:"T-Bane",icon:"🚇"};
  if(value.includes("FERRY")||value.includes("WATER")||value.includes("BOAT")||value.includes("SHIP"))return {color:"#174f9b",label:"Boat",icon:"🛥️"};
- return {color:"#e00000",label:"Bus"};
+ return {color:"#e00000",label:"Bus",icon:"🚌"};
 }
 function transportModeIcon(mode, route) {
  const style=transportModeStyle(mode,route),number=String(route||"").trim();
