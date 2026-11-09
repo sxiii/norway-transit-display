@@ -2,6 +2,7 @@
 const CONFIG = {
   enturClient: "github-sxiii-norway-transit-display",
   vehiclesUrl: "https://api.entur.io/realtime/v2/vehicles/graphql",
+  vehicleSubscriptionsUrl: "wss://api.entur.io/realtime/v2/vehicles/subscriptions",
   journeyUrl: "https://api.entur.io/journey-planner/v3/graphql",
   transitDataUrl: "https://api.entur.io/transit-data/v1beta/graphql",
   ruterUrl: "https://cosmo-router.transhub.io/graphql",
@@ -11,7 +12,7 @@ const CONFIG = {
 };
 
 const $ = (id) => document.getElementById(id);
-const state = { map: null, mapMarker: null, allBusMarkers: new Map(), allBusMarkersFitted: false, mapMode: "single", selectedMapJourney: null, selectedRouteFilter: "", trackAllMode: false, searchTimer: null, searchAbort: null, timer: null, busy: false, departures: [], vehicles: [], lastUpdated: null, stopName: null, ruterSocket: null, ruterAutoStarted: false, ruterProgress: new Map(), ruterRouteDepartures: new Map(), ruterJourneyRoutes: new Map(), ruterLineSubscriptions: new Set(), ruterJourneySubscriptions: new Set() };
+const state = { map: null, mapMarker: null, allBusMarkers: new Map(), allBusMarkersFitted: false, mapMode: "single", selectedMapJourney: null, selectedRouteFilter: "", trackAllMode: false, searchTimer: null, searchAbort: null, timer: null, busy: false, departures: [], vehicles: [], lastUpdated: null, stopName: null, ruterSocket: null, ruterAutoStarted: false, ruterProgress: new Map(), extraModeProgress: new Map(), extraModeSocket: null, allModeMarkers: new Map(), ruterRouteDepartures: new Map(), ruterJourneyRoutes: new Map(), ruterLineSubscriptions: new Set(), ruterJourneySubscriptions: new Set() };
 
 function setStatus(id, label, kind = "neutral", detail = "") {
   const node = $(id);
@@ -194,6 +195,8 @@ const RUTER_PROGRESS_SUBSCRIPTION = `subscription vehicleProgress($id: String!, 
   }
 }`;
 function closeRuterSocket() {
+  if (state.extraModeSocket) { try { state.extraModeSocket.close(1000, "Ruter reconnect"); } catch {} state.extraModeSocket = null; }
+  state.extraModeProgress.clear();
   if (state.ruterSocket) { try { state.ruterSocket.close(1000, "Ruter reconnect"); } catch {} state.ruterSocket = null; }
   state.ruterProgress.clear(); state.ruterRouteDepartures.clear(); state.ruterJourneyRoutes.clear(); state.ruterLineSubscriptions.clear(); state.ruterJourneySubscriptions.clear();
 }
@@ -287,6 +290,53 @@ async function discoverAllRuterKeys() {
   return [...keys.values()];
 }
 
+function connectEnturModeTracking() {
+ if(state.extraModeSocket) { try { state.extraModeSocket.close(1000,"Reconnect"); } catch {} }
+ state.extraModeProgress.clear();
+ const ws=new WebSocket(CONFIG.vehicleSubscriptionsUrl,"graphql-transport-ws");
+ state.extraModeSocket=ws;
+ const modes=["TRAM","RAIL","FERRY"];
+ const labels={TRAM:"trams",RAIL:"trains",FERRY:"boats"};
+ const bounds={minLat:59.0,minLon:9.5,maxLat:60.5,maxLon:11.8};
+ const pending=new Map();
+ ws.onopen=()=>ws.send(JSON.stringify({type:"connection_init",payload:{"ET-Client-Name":CONFIG.enturClient}}));
+ ws.onerror=()=>log("Entur vehicle-position WebSocket network error.","error");
+ ws.onclose=e=>{if(state.extraModeSocket===ws){state.extraModeSocket=null;log("Entur vehicle-position stream closed ("+e.code+").","error");}};
+ ws.onmessage=event=>{
+  let msg;try{msg=JSON.parse(event.data);}catch{return;}
+  if(msg.type==="ping"){ws.send(JSON.stringify({type:"pong",...(msg.payload===undefined?{}:{payload:msg.payload})}));return;}
+  if(msg.type==="connection_ack"){
+   modes.forEach(mode=>{
+    const id="entur-mode-"+mode.toLowerCase();
+    const query=`subscription ModeVehicles($mode: VehicleModeEnumeration!, $boundingBox: BoundingBox) {
+      vehicles(mode:$mode, boundingBox:$boundingBox, monitored:true, maxDataAge:"PT5M") {
+       mode vehicleId vehicleRef originName destinationName line { name publicCode }
+       location { latitude longitude } lastUpdated delay serviceJourney { id date }
+      }
+    }`;
+    pending.set(id,mode);
+    ws.send(JSON.stringify({id,type:"subscribe",payload:{operationName:"ModeVehicles",query,variables:{mode,boundingBox:bounds}}}));
+   });
+   $("route-filter-status").textContent="Ruter buses plus Entur live tracking for trains, trams and boats within the Oslo region.";
+   return;
+  }
+  if(msg.type==="next"){
+   const mode=pending.get(msg.id);if(!mode)return;
+   const payload=msg.payload||{};
+   if(payload.errors?.length){payload.errors.forEach(e=>log("Entur "+mode+" stream: "+e.message,"error"));return;}
+   const vehicles=payload.data?.vehicles;
+   if(!Array.isArray(vehicles))return;
+   for(const vehicle of vehicles){
+    const loc=vehicle.location;
+    if(!loc||!Number.isFinite(Number(loc.latitude))||!Number.isFinite(Number(loc.longitude)))continue;
+    const id=vehicle.vehicleId||vehicle.vehicleRef||vehicle.serviceJourney?.id;
+    if(id)state.extraModeProgress.set(mode+":"+id,{...vehicle,mode});
+   }
+   if(state.mapMode==="all")updateAllVehicleMarkers();
+   if(state.trackAllMode)renderBoard();
+  }
+ };
+}
 async function probeRuter() {
   closeRuterSocket();
   clearVehicleMarkers();
@@ -526,11 +576,26 @@ function busNumberIcon(route) {
   popupAnchor:[0,-15]
  });
 }
+function transportModeStyle(mode) {
+ const value=String(mode||"").toUpperCase();
+ if(value==="TRAM")return {color:"#8fdcff",label:"Tram"};
+ if(value==="RAIL")return {color:"#35c46a",label:"Train"};
+ if(value==="FERRY")return {color:"#174f9b",label:"Boat"};
+ return {color:"#e00000",label:"Bus"};
+}
+function transportModeIcon(mode, route) {
+ const style=transportModeStyle(mode),number=String(route||"").trim();
+ return L.divIcon({
+  className:"bus-number-marker",
+  html:'<span class="bus-number-dot" style="background:'+style.color+'">'+(number?esc(number):style.label[0])+'</span>',
+  iconSize:[30,30],iconAnchor:[15,15],popupAnchor:[0,-15]
+ });
+}
 function clearVehicleMarkers(){
  if(state.mapMarker&&state.map)state.map.removeLayer(state.mapMarker);
  state.mapMarker=null;
- if(state.map)for(const marker of state.allBusMarkers.values())state.map.removeLayer(marker);
- state.allBusMarkers.clear();state.allBusMarkersFitted=false;
+ if(state.map)for(const marker of [...state.allBusMarkers.values(),...state.allModeMarkers.values()])state.map.removeLayer(marker);
+ state.allBusMarkers.clear();state.allModeMarkers.clear();state.allBusMarkersFitted=false;
 }
 function updateAllVehicleMarkers() {
  initVehicleMap();if(!state.map)return;
@@ -552,8 +617,23 @@ function updateAllVehicleMarkers() {
   marker.bindPopup("<b>"+esc(label)+"</b><br>"+esc(vin)+"<br>"+lat.toFixed(5)+", "+lon.toFixed(5));
   bounds.push(point);count++;
  }
+ let extraCount=0;
+ for(const [id,vehicle] of state.extraModeProgress){
+  const lat=Number(vehicle.location?.latitude),lon=Number(vehicle.location?.longitude);
+  if(!Number.isFinite(lat)||!Number.isFinite(lon))continue;
+  const mode=vehicle.mode||"";
+  const style=transportModeStyle(mode);
+  const route=vehicle.line?.publicCode||vehicle.line?.name||vehicle.lineName||style.label;
+  const point=[lat,lon];
+  let marker=state.allModeMarkers.get(id);
+  if(!marker) { marker=L.marker(point,{icon:transportModeIcon(mode,route)}).addTo(state.map);state.allModeMarkers.set(id,marker); }
+  else { marker.setLatLng(point);marker.setIcon(transportModeIcon(mode,route)); }
+  marker.bindPopup("<b>"+esc(route)+" · "+esc(style.label)+"</b><br>"+esc(vehicle.vehicleId||"Vehicle")+
+    (vehicle.destinationName?"<br>To "+esc(vehicle.destinationName):"")+"<br>"+lat.toFixed(5)+", "+lon.toFixed(5));
+  bounds.push(point);extraCount++;
+ }
  $("map-subtitle").textContent=(state.selectedRouteFilter ? "Route "+state.selectedRouteFilter+" · " : "")+
-  count+" buses with live positions · updates in real time";
+  count+" buses · "+extraCount+" trains, trams & boats with live positions · updates in real time";
  if(bounds.length&&!state.allBusMarkersFitted){state.map.fitBounds(bounds,{padding:[28,28],maxZoom:15});state.allBusMarkersFitted=true;}
  setTimeout(()=>state.map?.invalidateSize(),0);
 }
@@ -625,6 +705,7 @@ $("track-all").addEventListener("click", () => {
   renderBoard();
   $("route-filter-status").textContent="Discovering all Ruter bus lines and their stops… this can take a little while.";
   showAllSyncedBuses();
+  connectEnturModeTracking();
   probeRuter();
 });
 $("route-track").addEventListener("click", () => {
