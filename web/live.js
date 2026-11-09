@@ -384,6 +384,21 @@ function routeLabelForJourney(journeyId) {
  const destination=call.destinationDisplay?.frontText||"";
  return [route,destination].filter(Boolean).join(" ")||"Ruter bus";
 }
+function busRouteNumber(journeyId) {
+ const call=state.departures.find(item=>item.serviceJourney?.id===journeyId);
+ return call?.serviceJourney?.journeyPattern?.line?.publicCode ||
+  call?.serviceJourney?.journeyPattern?.line?.name || "";
+}
+function busNumberIcon(route) {
+ const number=String(route||"").trim();
+ return L.divIcon({
+  className:"bus-number-marker",
+  html:'<span class="bus-number-dot">'+(number?esc(number):"")+'</span>',
+  iconSize:[30,30],
+  iconAnchor:[15,15],
+  popupAnchor:[0,-15]
+ });
+}
 function clearVehicleMarkers(){
  if(state.mapMarker&&state.map)state.map.removeLayer(state.mapMarker);
  state.mapMarker=null;
@@ -398,8 +413,13 @@ function updateAllVehicleMarkers() {
   if(!Number.isFinite(lat)||!Number.isFinite(lon))continue;
   const point=[lat,lon],label=routeLabelForJourney(journeyId),vin=progress.id||"Ruter bus";
   let marker=state.allBusMarkers.get(journeyId);
-  if(!marker){marker=L.circleMarker(point,{radius:9,color:"#ffffff",weight:2,fillColor:"#e30613",fillOpacity:1}).addTo(state.map);state.allBusMarkers.set(journeyId,marker);}
-  else marker.setLatLng(point);
+  if(!marker){
+   marker=L.marker(point,{icon:busNumberIcon(busRouteNumber(journeyId))}).addTo(state.map);
+   state.allBusMarkers.set(journeyId,marker);
+  } else {
+   marker.setLatLng(point);
+   marker.setIcon(busNumberIcon(busRouteNumber(journeyId)));
+  }
   marker.bindPopup("<b>"+esc(label)+"</b><br>"+esc(vin)+"<br>"+lat.toFixed(5)+", "+lon.toFixed(5));
   bounds.push(point);count++;
  }
@@ -413,9 +433,10 @@ function updateVehicleMap(progress) {
  if(!Number.isFinite(lat)||!Number.isFinite(lon))return;
  initVehicleMap();if(!state.map)return;
  const point=[lat,lon];
- if(!state.mapMarker)state.mapMarker=L.circleMarker(point,{radius:9,color:"#ffffff",weight:3,fillColor:"#e30613",fillOpacity:1}).addTo(state.map);
- else state.mapMarker.setLatLng(point);
- state.mapMarker.bindPopup("<b>"+esc(progress.id||"Ruter bus")+"</b><br>"+lat.toFixed(5)+", "+lon.toFixed(5));
+ const route=busRouteNumber(state.selectedMapJourney);
+ if(!state.mapMarker)state.mapMarker=L.marker(point,{icon:busNumberIcon(route)}).addTo(state.map);
+ else {state.mapMarker.setLatLng(point);state.mapMarker.setIcon(busNumberIcon(route));}
+ state.mapMarker.bindPopup("<b>"+esc(route||"Ruter bus")+"</b><br>"+esc(progress.id||"Ruter bus")+"<br>"+lat.toFixed(5)+", "+lon.toFixed(5));
  state.map.panTo(point,{animate:false});
  $("map-subtitle").textContent=(progress.id||"Ruter bus")+" · "+lat.toFixed(5)+", "+lon.toFixed(5)+" · "+(progress.status||"Live");
  setTimeout(()=>state.map?.invalidateSize(),0);
