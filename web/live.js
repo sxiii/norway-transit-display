@@ -207,6 +207,8 @@ async function discoverRouteRuterKeys(route) {
 
 async function probeRuter() {
   closeRuterSocket();
+  clearVehicleMarkers();
+  if (state.mapMode === "all") updateAllVehicleMarkers();
   setStatus("ruter-status", "Requesting anonymous token", "working", "No account login is used");
   $("ruter-details").textContent = "Requesting token…";
   $("ruter-raw").textContent = "No WebSocket messages captured yet.";
@@ -228,6 +230,9 @@ async function probeRuter() {
           const id = [quayId, lineId, frontText].join("|");
           return [[id, {id, quayId, lineId, frontText, route:call.serviceJourney?.journeyPattern?.line?.publicCode || ""}]];
         })).values()];
+    if (state.selectedRouteFilter) {
+      $("route-filter-status").textContent = "Found "+ruterKeys.length+" stop/destination subscriptions for route "+state.selectedRouteFilter+"; waiting for live vehicle positions.";
+    }
     if (!ruterKeys.length) {
       throw new Error("No usable Ruter departure keys found. Need quay.id, line.id (RUT:Line:…), and destinationDisplay.frontText on an Entur departure.");
     }
