@@ -719,7 +719,7 @@ document.addEventListener("fullscreenchange",()=>{$("map-fullscreen").textConten
 
 setupStopSearch();
 $("refresh").addEventListener("click", refreshEntur);
-$("ruter-probe").addEventListener("click", () => { state.selectedRouteFilter=""; state.trackAllMode=false; renderBoard(); probeRuter(); });
+$("ruter-probe").addEventListener("click", () => { state.selectedRouteFilter=""; state.trackAllMode=true; renderBoard(); $("route-filter-status").textContent="Discovering all Ruter bus lines and their stops…"; probeRuter(); });
 $("track-all").addEventListener("click", () => {
   state.selectedRouteFilter="";
   state.trackAllMode=true;
