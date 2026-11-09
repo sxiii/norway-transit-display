@@ -718,7 +718,7 @@ function setupStopSearch(){
  $("stop-search").addEventListener("keydown",event=>{if(event.key==="Enter"){const first=$("stop-suggestions").querySelector(".suggestion");if(first){event.preventDefault();first.click();}}});
  document.addEventListener("click",e=>{if(!e.target.closest(".stop-search-wrap"))$("stop-suggestions").hidden=true;});
 }
-$("map-center").addEventListener("click",()=>{const bounds=[...state.allBusMarkers.values(),...state.allModeMarkers.values()].map(marker=>marker.getLatLng());if(bounds.length)state.map.fitBounds(bounds,{padding:[28,28],maxZoom:15);});
+$("map-center").addEventListener("click",()=>{const bounds=[...state.allBusMarkers.values(),...state.allModeMarkers.values()].map(marker=>marker.getLatLng());if(bounds.length)state.map.fitBounds(bounds,{padding:[28,28],maxZoom:15});});
 $("map-selected-stop").addEventListener("click",()=>{
   const wasGlobal=state.trackAllMode;
   state.trackAllMode=false;
