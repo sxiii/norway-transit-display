@@ -56,7 +56,7 @@ function vehicleQuery(code) {
 function departureQuery(stopId, count) {
   const id = JSON.stringify(stopId);
   return `query { stopPlace(id: ${id}) {
-    id name transportMode otherTransportModes stopPlaceType
+    id name transportMode
     estimatedCalls(numberOfDepartures: ${count}) {
       realtime aimedDepartureTime expectedDepartureTime actualDepartureTime
       destinationDisplay { frontText }
@@ -174,11 +174,22 @@ async function refreshEntur() {
       gql(CONFIG.vehiclesUrl, vehicleQuery("VYG"), enturHeaders),
       gql(CONFIG.vehiclesUrl, vehicleQuery("VYX"), enturHeaders)
     ]);
+    // Stop-register metadata lives in Transit Data, not Journey Planner.
+    let stopMetadata = null;
+    try {
+      const metadata = await gql(CONFIG.transitDataUrl,
+        `query SelectedStopMetadata { stopPlace(id: ${JSON.stringify(stopId)}) { id name transportMode otherTransportModes stopPlaceType } }`,
+        enturHeaders
+      );
+      stopMetadata = metadata.stopPlace;
+    } catch (metadataError) {
+      log("Entur stop-register metadata unavailable: " + metadataError.message, "error");
+    }
     const stop = departureData.stopPlace;
     if (!stop) throw new Error("Entur returned no stopPlace for " + stopId);
     state.stopName = stop.name || stopId;
-    state.stopType = stop.stopPlaceType || "";
-    state.stopTransportModes = [...new Set([stop.transportMode, ...(stop.otherTransportModes || [])].filter(Boolean))];
+    state.stopType = stopMetadata?.stopPlaceType || "";
+    state.stopTransportModes = [...new Set([stopMetadata?.transportMode || stop.transportMode, ...(stopMetadata?.otherTransportModes || [])].filter(Boolean))];
     state.departures = stop.estimatedCalls || [];
     state.vehicles = flattenVehicles([{code:"VYG",data:vyg},{code:"VYX",data:vyx}]);
     state.lastUpdated = Date.now();
@@ -381,7 +392,7 @@ async function probeRuter() {
       $("route-filter-status").textContent = "Found "+ruterKeys.length+" stop/destination subscriptions for route "+state.selectedRouteFilter+"; waiting for live vehicle positions.";
     }
     if (!ruterKeys.length) {
-      throw new Error("No usable Ruter departure keys found. Need quay.id, line.id (RUT:Line:…), and destinationDisplay.frontText on an Entur departure.");
+      throw new Error("No Ruter-operated departures were found at the selected stop. Use “Connect Ruter live data · all lines” or select a stop served by Ruter buses.");
     }
 
     const ws = new WebSocket(CONFIG.ruterUrl.replace(/^https:/, "wss:").replace(/^http:/, "ws:"), "graphql-transport-ws");
