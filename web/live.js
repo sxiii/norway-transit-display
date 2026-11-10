@@ -232,8 +232,18 @@ const RUTER_PROGRESS_SUBSCRIPTION = `subscription vehicleProgress($id: String!, 
   }
 }`;
 function closeRuterSocket() {
+  if (state.ruterReconnectTimer) { clearTimeout(state.ruterReconnectTimer); state.ruterReconnectTimer = null; }
   if (state.ruterSocket) { try { state.ruterSocket.close(1000, "Ruter reconnect"); } catch {} state.ruterSocket = null; }
   state.ruterProgress.clear(); state.ruterRouteDepartures.clear(); state.ruterJourneyRoutes.clear(); state.ruterLineSubscriptions.clear(); state.ruterJourneySubscriptions.clear();
+}
+function scheduleRuterReconnect() {
+  if (state.ruterReconnectTimer) return;
+  const delay = Math.min(60000, 2000 * Math.pow(2, state.ruterReconnectAttempts++)) * (0.8 + Math.random() * 0.4);
+  state.ruterReconnectTimer = setTimeout(() => {
+    state.ruterReconnectTimer = null;
+    if (!state.ruterSocket && (state.trackAllMode || state.departures.some(call => call.serviceJourney?.journeyPattern?.line?.id?.startsWith("RUT:Line:")))) probeRuter();
+  }, delay);
+  $("tracking-status").textContent = "Ruter connection interrupted · retrying in about " + Math.round(delay / 1000) + " seconds…";
 }
 async function discoverRouteRuterKeys(route) {
   const lineData = await gql(CONFIG.transitDataUrl,
@@ -475,6 +485,7 @@ async function probeRuter() {
         state.ruterSocket = null;
         setStatus("ruter-status", "WebSocket closed", "bad", "Close code "+event.code+(event.reason ? " · "+event.reason : ""));
         log("Ruter WebSocket closed (code "+event.code+").", "error");
+        scheduleRuterReconnect();
       }
     };
     ws.onopen = () => {
@@ -499,6 +510,7 @@ async function probeRuter() {
       if (msg.type === "pong") return;
       if (msg.type === "connection_ack") {
         acknowledged = true;
+        state.ruterReconnectAttempts = 0;
         ruterKeys.forEach((key,index) => {
           const id = "ruter-line-"+index;
           state.ruterLineSubscriptions.add(id);
@@ -590,6 +602,7 @@ async function probeRuter() {
     $("tracking-status").textContent = "Vehicle tracking could not start: "+error.message;
     setStatus("ruter-status", "Probe failed", "bad", error.message);
     log("Ruter probe failed: "+error.message, "error");
+    if (state.trackAllMode || state.departures.some(call => call.serviceJourney?.journeyPattern?.line?.id?.startsWith("RUT:Line:"))) scheduleRuterReconnect();
   }
 }
 
