@@ -8,11 +8,14 @@ const CONFIG = {
   ruterUrl: "https://cosmo-router.transhub.io/graphql",
   defaultStop: "NSR:StopPlace:4000",
   refreshMs: 30000,
-  ruterClientVersion: "7.105.1"
+  ruterClientVersion: "7.105.1",
+  vehicleStaleMs: 180000,
+  maxRuterLineSubscriptions: 500,
+  maxRuterJourneySubscriptions: 1000
 };
 
 const $ = (id) => document.getElementById(id);
-const state = { map: null, mapMarker: null, allBusMarkers: new Map(), allBusMarkersFitted: false, mapMode: "single", selectedMapJourney: null, trackAllMode: false, searchTimer: null, searchAbort: null, timer: null, busy: false, departures: [], vehicles: [], lastUpdated: null, stopName: null, stopType: "", stopTransportModes: [], ruterSocket: null, ruterAutoStarted: false, ruterProgress: new Map(), extraModeProgress: new Map(), extraModeSocket: null, allModeMarkers: new Map(), ruterRouteDepartures: new Map(), ruterJourneyRoutes: new Map(), ruterLineSubscriptions: new Set(), ruterJourneySubscriptions: new Set() };
+const state = { map: null, mapMarker: null, allBusMarkers: new Map(), allBusMarkersFitted: false, mapMode: "single", selectedMapJourney: null, trackAllMode: false, searchTimer: null, searchAbort: null, timer: null, busy: false, departures: [], vehicles: [], lastUpdated: null, stopName: null, stopType: "", stopTransportModes: [], ruterSocket: null, ruterAutoStarted: false, ruterProgress: new Map(), extraModeProgress: new Map(), extraModeSocket: null, allModeMarkers: new Map(), ruterRouteDepartures: new Map(), ruterJourneyRoutes: new Map(), ruterLineSubscriptions: new Set(), ruterJourneySubscriptions: new Set(), refreshRequestId: 0, refreshController: null, extraModeReconnectTimer: null, extraModeReconnectAttempts: 0, ruterReconnectTimer: null, ruterReconnectAttempts: 0, ruterCapWarning: false };
 
 function setStatus(id, label, kind = "neutral", detail = "") {
   const node = $(id);
@@ -175,17 +178,21 @@ function esc(value) {
 }
 
 async function refreshEntur(refreshStopVehicleTracking = false) {
-  if (state.busy) return;
+  const requestId = ++state.refreshRequestId;
+  if (state.refreshController) state.refreshController.abort();
+  const controller = new AbortController();
+  state.refreshController = controller;
   state.busy = true;
-  setStatus("entur-status", "Connecting / refreshing", "working", "Entur HTTP GraphQL");
   const stopId = $("stop-id").value.trim();
   const count = Math.max(1, Math.min(50, Number($("departure-limit").value) || 20));
+  setStatus("entur-status", "Connecting / refreshing", "working", "Entur HTTP GraphQL · " + stopId);
   try {
     const [departureData, vyg, vyx] = await Promise.all([
-      gql(CONFIG.journeyUrl, departureQuery(stopId, count), enturHeaders),
-      gql(CONFIG.vehiclesUrl, vehicleQuery("VYG"), enturHeaders),
-      gql(CONFIG.vehiclesUrl, vehicleQuery("VYX"), enturHeaders)
+      gql(CONFIG.journeyUrl, departureQuery(stopId, count), enturHeaders, controller.signal),
+      gql(CONFIG.vehiclesUrl, vehicleQuery("VYG"), enturHeaders, controller.signal),
+      gql(CONFIG.vehiclesUrl, vehicleQuery("VYX"), enturHeaders, controller.signal)
     ]);
+    if (requestId !== state.refreshRequestId || stopId !== $("stop-id").value.trim()) return;
     const stop = departureData.stopPlace;
     if (!stop) throw new Error("Entur returned no stopPlace for " + stopId);
     state.stopName = stop.name || stopId;
@@ -202,10 +209,14 @@ async function refreshEntur(refreshStopVehicleTracking = false) {
     log("Entur refreshed: " + state.departures.length + " departures, " + state.vehicles.length + " VYG/VYX vehicles.", "success");
     if (refreshStopVehicleTracking && !state.trackAllMode) probeRuter();
   } catch (error) {
+    if (error.name === "AbortError" || requestId !== state.refreshRequestId) return;
     setStatus("entur-status", "Request failed", "bad", error.message);
     log("Entur failed: " + error.message, "error");
   } finally {
-    state.busy = false;
+    if (requestId === state.refreshRequestId) {
+      state.busy = false;
+      state.refreshController = null;
+    }
   }
 }
 
@@ -325,11 +336,12 @@ function connectEnturModeTracking() {
  const pending=new Map();
  ws.onopen=()=>ws.send(JSON.stringify({type:"connection_init",payload:{"ET-Client-Name":CONFIG.enturClient}}));
  ws.onerror=()=>{log("Entur vehicle-position WebSocket network error.","error");$("tracking-status").textContent="Entur metro/train/tram/boat stream failed. Check diagnostics; Ruter bus tracking can continue.";};
- ws.onclose=e=>{if(state.extraModeSocket===ws){state.extraModeSocket=null;log("Entur vehicle-position stream closed ("+e.code+").","error");}};
+ ws.onclose=e=>{if(state.extraModeSocket===ws){state.extraModeSocket=null;log("Entur vehicle-position stream closed ("+e.code+").","error");const delay=Math.min(60000,1000*Math.pow(2,state.extraModeReconnectAttempts++))*(0.8+Math.random()*0.4);clearTimeout(state.extraModeReconnectTimer);state.extraModeReconnectTimer=setTimeout(()=>{if(!state.extraModeSocket)connectEnturModeTracking();},delay);}};
  ws.onmessage=event=>{
   let msg;try{msg=JSON.parse(event.data);}catch{return;}
   if(msg.type==="ping"){ws.send(JSON.stringify({type:"pong",...(msg.payload===undefined?{}:{payload:msg.payload})}));return;}
   if(msg.type==="connection_ack"){
+   state.extraModeReconnectAttempts = 0;
    modes.forEach(mode=>{
     const id="entur-mode-"+mode.toLowerCase();
     const query=`subscription ModeVehicles($mode: VehicleModeEnumeration!, $boundingBox: BoundingBox) {
@@ -386,6 +398,11 @@ async function probeRuter() {
             const id = [quayId, lineId, frontText].join("|");
             return [[id, {id, quayId, lineId, frontText, route:call.serviceJourney?.journeyPattern?.line?.publicCode || ""}]];
           })).values()];
+    if (state.trackAllMode && ruterKeys.length > CONFIG.maxRuterLineSubscriptions) {
+      log("Ruter discovery found "+ruterKeys.length+" keys; limiting this session to "+CONFIG.maxRuterLineSubscriptions+" to protect browser/API resources.", "info");
+      ruterKeys.length = CONFIG.maxRuterLineSubscriptions;
+    }
+    state.ruterCapWarning = false;
     if (state.trackAllMode) {
       $("tracking-status").textContent = "Found "+ruterKeys.length+" stop/destination subscriptions across the Ruter bus network; waiting for live vehicle positions.";
     } else {
@@ -511,6 +528,13 @@ async function probeRuter() {
             if (operation.routeNumber) state.ruterJourneyRoutes.set(call.serviceJourneyId, operation.routeNumber);
             const key = call.serviceJourneyId+"|"+call.operatingDate;
             if (state.ruterJourneySubscriptions.has(key)) return;
+            if (state.ruterJourneySubscriptions.size >= CONFIG.maxRuterJourneySubscriptions) {
+              if (!state.ruterCapWarning) {
+                state.ruterCapWarning = true;
+                log("Ruter live journey subscription limit reached ("+CONFIG.maxRuterJourneySubscriptions+"); additional journeys are being skipped to protect browser/API resources.", "info");
+              }
+              return;
+            }
             state.ruterJourneySubscriptions.add(key);
             const subId = "ruter-progress-"+state.ruterJourneySubscriptions.size;
             subscribe(subId, "vehicleProgress", RUTER_PROGRESS_SUBSCRIPTION,
@@ -531,7 +555,7 @@ async function probeRuter() {
           }
           progressUpdates++;
           const journeyId = progress.serviceJourneyId || operation.variables.id;
-          state.ruterProgress.set(journeyId, progress);
+          state.ruterProgress.set(journeyId, {...progress, receivedAt:Date.now()});
           renderBoard();
           if (state.mapMode === "all") updateAllVehicleMarkers();
 
@@ -602,22 +626,18 @@ function busNumberIcon(route) {
 function transportModeStyle(mode, route) {
  const value=String(mode||"").toUpperCase();
  const code=String(route||"").trim().toUpperCase();
-
- // Route identifiers take precedence: a multimodal stop must not paint every
- // departure with the stop's shared transport mode.
- if(/^B/.test(code))return {color:"#174f9b",label:"Boat",icon:"🛥️"};
- if(/^(?:FLY|R|L)/.test(code))return {color:"#35c46a",label:"Train",icon:"🚆"};
-
- const number=/^\d+$/.test(code)?Number(code):NaN;
- if(Number.isInteger(number)&&number>=1&&number<=9)return {color:"#16803c",label:"T-Bane",icon:"🚇"};
- if(Number.isInteger(number)&&number>=10&&number<=19)return {color:"#8fdcff",label:"Tram",icon:"🚋"};
- if(Number.isInteger(number)&&number>=20&&number<=1000)return {color:"#e00000",label:"Bus",icon:"🚌"};
-
- // Only use the vehicle's own mode when no recognizable line code is present.
+ // Trust the provider's explicit transport mode first. Oslo route-number
+ // ranges are only a fallback when the feed does not identify the mode.
  if(value.includes("TRAM"))return {color:"#8fdcff",label:"Tram",icon:"🚋"};
  if(value.includes("RAIL")||value.includes("TRAIN"))return {color:"#35c46a",label:"Train",icon:"🚆"};
  if(value.includes("METRO")||value.includes("SUBWAY"))return {color:"#16803c",label:"T-Bane",icon:"🚇"};
  if(value.includes("FERRY")||value.includes("WATER")||value.includes("BOAT")||value.includes("SHIP"))return {color:"#174f9b",label:"Boat",icon:"🛥️"};
+ if(value.includes("BUS")||value==="COACH")return {color:"#e00000",label:"Bus",icon:"🚌"};
+ if(/^B/.test(code))return {color:"#174f9b",label:"Boat",icon:"🛥️"};
+ if(/^(?:FLY|R|L)/.test(code))return {color:"#35c46a",label:"Train",icon:"🚆"};
+ const number=/^\d+$/.test(code)?Number(code):NaN;
+ if(Number.isInteger(number)&&number>=1&&number<=9)return {color:"#16803c",label:"T-Bane",icon:"🚇"};
+ if(Number.isInteger(number)&&number>=10&&number<=19)return {color:"#8fdcff",label:"Tram",icon:"🚋"};
  return {color:"#e00000",label:"Bus",icon:"🚌"};
 }
 function transportModeIcon(mode, route) {
@@ -639,20 +659,26 @@ function updateAllVehicleMarkers() {
  const bounds=[];let busCount=0,enturCount=0;
  const selectedJourneys=new Set(state.departures.map(call=>call.serviceJourney?.id).filter(Boolean));
  const inScope=journeyId=>state.trackAllMode || (journeyId && selectedJourneys.has(journeyId));
- // Ruter bus vehicle-progress positions.
+ // Ruter bus vehicle-progress positions. Expire silent journeys and reconcile
+ // markers so a vehicle cannot remain visible after its last live update.
+ const activeRuterKeys=new Set(), now=Date.now();
  for(const [journeyId,progress] of state.ruterProgress){
+  const updatedAt=Number(progress.receivedAt)||Date.parse(progress.lastUpdated||"")||now;
+  if(now-updatedAt>CONFIG.vehicleStaleMs){state.ruterProgress.delete(journeyId);continue;}
   const route=busRouteNumber(journeyId);
   if(!inScope(journeyId))continue;
   if(progress.latitude==null||progress.longitude==null)continue;
   const lat=Number(progress.latitude),lon=Number(progress.longitude);
   if(!Number.isFinite(lat)||!Number.isFinite(lon))continue;
   const point=[lat,lon],label=routeLabelForJourney(journeyId),vin=progress.id||"Ruter bus";
+  activeRuterKeys.add(journeyId);
   let marker=state.allBusMarkers.get(journeyId);
   if(!marker){marker=L.marker(point,{icon:busNumberIcon(route)}).addTo(state.map);state.allBusMarkers.set(journeyId,marker);}
   else{marker.setLatLng(point);marker.setIcon(busNumberIcon(route));}
   marker.bindPopup("<b>"+esc(label)+"</b><br>"+esc(vin)+"<br>"+lat.toFixed(5)+", "+lon.toFixed(5));
   bounds.push(point);busCount++;
  }
+ for(const [journeyId,marker] of state.allBusMarkers){if(!activeRuterKeys.has(journeyId)){state.map.removeLayer(marker);state.allBusMarkers.delete(journeyId);}}
  // Entur positions from both the one-shot vehicle query and live mode subscriptions.
  const enturVehicles=new Map();
  for(const vehicle of state.vehicles){
@@ -672,6 +698,8 @@ function updateAllVehicleMarkers() {
   const call=state.departures.find(item=>item.serviceJourney?.id===journeyId);
   const route=vehicle.line?.publicCode||vehicle.line?.lineName||call?.serviceJourney?.journeyPattern?.line?.publicCode||call?.serviceJourney?.journeyPattern?.line?.name||"";
   if(!inScope(journeyId))continue;
+  const timestamp=Date.parse(vehicle.lastUpdated||"");
+  if(Number.isFinite(timestamp)&&now-timestamp>CONFIG.vehicleStaleMs)continue;
   const mode=vehicle.mode||"",style=transportModeStyle(mode,route),point=[lat,lon],key="entur:"+id;
   activeKeys.add(key);
   let marker=state.allModeMarkers.get(key);
