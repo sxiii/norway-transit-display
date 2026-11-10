@@ -10,12 +10,6 @@ on:
         type: string
   schedule:
     - cron: "7,22,37,52 * * * *"
-  push:
-    paths:
-      - ".github/workflows/collect-vehicle-data.yml"
-      - "scripts/**"
-      - "tests/**"
-      - "web/**"
 
 permissions:
   contents: read

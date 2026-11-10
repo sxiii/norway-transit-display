@@ -1,0 +1,43 @@
+name: Validate transit display
+
+on:
+  push:
+    paths:
+      - "web/**"
+      - "scripts/**"
+      - "tests/**"
+      - ".github/workflows/**"
+  pull_request:
+    paths:
+      - "web/**"
+      - "scripts/**"
+      - "tests/**"
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Run offline Python tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Check browser JavaScript syntax
+        run: node --check web/live.js
