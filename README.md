@@ -13,7 +13,8 @@ This independent research project is not affiliated with Entur, Vy, Ruter, or th
 - `scripts/entur_departures.py`: upcoming departures at a supplied Entur stop-place ID, including service-journey IDs.
 - `scripts/normalize_display.py`: joins vehicle positions and stop departures by service-journey ID and emits a display-ready JSON model.
 - `web/index.html` + `web/live.js`: browser-native live display with Entur polling, route-number badges, and an experimental Ruter anonymous-token / GraphQL WebSocket probe.
-- `.github/workflows/collect-vehicle-data.yml`: scheduled and manually-triggered data collection.
+- `.github/workflows/collect-vehicle-data.yml`: scheduled and manually-triggered data collection (does not run on ordinary source pushes).
+- `.github/workflows/ci.yml`: offline Python tests and browser JavaScript syntax validation on pushes and pull requests.
 - `.github/workflows/deploy-pages.yml`: publishes the browser display to GitHub Pages.
 - `tests/`: offline unit tests.
 
@@ -56,7 +57,8 @@ The normalizer retains the complete stop departure board, including calls withou
 
 - A successful API response proves reachability, not that the endpoint is the same backend used by onboard passenger displays.
 - The browser display queries Entur directly and is subject to the APIs' availability and browser CORS policies.
-- The Ruter app-backend integration is experimental and may stop working if the app protocol changes.
+- The Ruter app-backend integration is experimental and may stop working if the app protocol changes. Global discovery is deliberately bounded to 500 line keys and 1,000 live journey subscriptions per session to avoid unbounded browser/API load; a cap warning is shown in the activity log.
+- Vehicle markers are expired after three minutes without a fresh provider update. The Entur mode WebSocket reconnects automatically with exponential backoff; Ruter reconnects automatically while a Ruter tracking scope is active.
 - A vehicle may not appear in the position feed or may not match a departure, even when the departure itself is valid.
 
 ## License
